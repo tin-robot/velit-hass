@@ -1,0 +1,43 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "Add Velit Device",
+        "description": "Enter the Bluetooth address of your Velit device.",
+        "data": {
+          "address": "Bluetooth Address"
+        }
+      },
+      "bluetooth_confirm": {
+        "title": "Confirm Velit Device",
+        "description": "Set up {name}?"
+      },
+      "device_type": {
+        "title": "Select Device Type",
+        "description": "Is this device a heater or an air conditioner?",
+        "data": {
+          "device_type": "Device Type"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to device",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "This device is already configured",
+      "no_devices_found": "No Velit devices found nearby"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Velit Options",
+        "data": {
+          "poll_interval": "Poll interval (seconds)"
+        }
+      }
+    }
+  }
+}
