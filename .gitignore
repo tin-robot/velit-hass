@@ -1,2 +1,8 @@
 # Local development tooling — not for version control
 .claude/
+tools/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo

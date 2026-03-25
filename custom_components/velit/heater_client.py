@@ -1,8 +1,7 @@
-"""Heater BLE packet builder and response parser.
+"""Heater BLE packet builder, response parser, and connection client.
 
 Protocol: Velit Air Heater Communication Protocol V1.02.
-This module handles packet construction and parsing only.
-BLE connection management is implemented separately.
+Packet construction, parsing, and BLE connection management are all here.
 
 Packet structure (command, master to slave):
   [0x55][length][master 4B][slave 4B][func][data N][checksum 2B]
@@ -22,7 +21,14 @@ assigned or discovered is not yet known. Needs hardware investigation.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from typing import Union
+
+from bleak import BleakClient, BLEDevice
+from bleak.backends.characteristic import BleakGATTCharacteristic
+
+from .const import UUID_READ_NOTIFY, UUID_WRITE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -123,3 +129,185 @@ def _validate_response_checksum(raw: bytes) -> bool:
     """
     expected = _heater_checksum(raw[:-2])
     return raw[-2:] == expected
+
+
+# ---------------------------------------------------------------------------
+# BLE connection layer
+# ---------------------------------------------------------------------------
+
+_RECONNECT_DELAY_INITIAL = 1.0   # seconds
+_RECONNECT_DELAY_MAX = 30.0      # seconds
+_COMMAND_TIMEOUT = 5.0           # seconds to wait for a notification response
+
+
+class VelitHeaterClient:
+    """BLE client for the Velit heater protocol (V1.02).
+
+    Manages connection, command serialisation, and notification handling.
+
+    Open question: the 4-byte master/slave addresses used in the packet
+    framing are not the same as BLE MAC addresses. How they are assigned
+    or derived is not yet known — hardware investigation required.
+    The constructor accepts them explicitly so the discover tool can probe
+    different values until the device responds.
+    """
+
+    def __init__(
+        self,
+        address: Union[str, BLEDevice],
+        master_addr: bytes = bytes([0x00, 0x00, 0x00, 0x01]),
+        slave_addr: bytes = bytes([0x00, 0x00, 0x00, 0x01]),
+    ) -> None:
+        """
+        Args:
+            address:     BLE device address or BLEDevice from discovery.
+            master_addr: 4-byte address placed in the master field of each packet.
+            slave_addr:  4-byte address placed in the slave field of each packet.
+        """
+        self._address = address
+        self._master_addr = master_addr
+        self._slave_addr = slave_addr
+        self._client: BleakClient | None = None
+        self._queue: asyncio.Queue[
+            tuple[int, bytes, asyncio.Future[dict | None]]
+        ] = asyncio.Queue()
+        # Resolved by the notification handler for whichever command is in flight.
+        self._pending: asyncio.Future[dict | None] | None = None
+        self._connected = False
+        self._queue_task: asyncio.Task | None = None
+        self._reconnect_task: asyncio.Task | None = None
+
+    # ------------------------------------------------------------------
+    # Public interface
+    # ------------------------------------------------------------------
+
+    async def connect(self) -> None:
+        """Connect to the device and subscribe to response notifications."""
+        self._client = BleakClient(
+            self._address,
+            disconnected_callback=self._on_disconnect,
+        )
+        await self._client.connect()
+        await self._client.start_notify(UUID_READ_NOTIFY, self._on_notification)
+        self._connected = True
+        self._queue_task = asyncio.ensure_future(self._queue_runner())
+        _LOGGER.info("Connected to %s", self._address)
+
+    async def disconnect(self) -> None:
+        """Disconnect cleanly, stopping the command queue first."""
+        self._connected = False
+
+        if self._reconnect_task and not self._reconnect_task.done():
+            self._reconnect_task.cancel()
+
+        if self._queue_task and not self._queue_task.done():
+            self._queue_task.cancel()
+
+        if self._client and self._client.is_connected:
+            try:
+                await self._client.stop_notify(UUID_READ_NOTIFY)
+            except Exception:
+                pass
+            await self._client.disconnect()
+
+        _LOGGER.info("Disconnected from %s", self._address)
+
+    async def send_command(
+        self, func: int, data: bytes, timeout: float = _COMMAND_TIMEOUT
+    ) -> dict | None:
+        """Queue a command and wait for the parsed response.
+
+        Returns the parsed response dict or None on timeout or connection error.
+        """
+        if not self._connected:
+            _LOGGER.debug("send_command called while not connected")
+            return None
+
+        loop = asyncio.get_running_loop()
+        fut: asyncio.Future[dict | None] = loop.create_future()
+        await self._queue.put((func, data, fut))
+        try:
+            # Allow extra headroom beyond the per-command timeout so the caller
+            # future is never orphaned inside the queue.
+            return await asyncio.wait_for(fut, timeout=timeout + 2.0)
+        except asyncio.TimeoutError:
+            _LOGGER.warning("send_command timed out waiting for result (func 0x%02X)", func)
+            return None
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    async def _queue_runner(self) -> None:
+        """Process commands one at a time until disconnected."""
+        while self._connected:
+            try:
+                func, data, caller_fut = await asyncio.wait_for(
+                    self._queue.get(), timeout=1.0
+                )
+            except asyncio.TimeoutError:
+                continue
+
+            loop = asyncio.get_running_loop()
+            self._pending = loop.create_future()
+            result: dict | None = None
+
+            try:
+                packet = build_command(
+                    self._master_addr, self._slave_addr, func, data
+                )
+                await self._client.write_gatt_char(  # type: ignore[union-attr]
+                    UUID_WRITE, packet, response=True
+                )
+                try:
+                    result = await asyncio.wait_for(
+                        asyncio.shield(self._pending), timeout=_COMMAND_TIMEOUT
+                    )
+                except asyncio.TimeoutError:
+                    _LOGGER.warning(
+                        "No notification within %.0fs for func 0x%02X",
+                        _COMMAND_TIMEOUT, func,
+                    )
+            except Exception as exc:
+                _LOGGER.warning("Command write failed (func 0x%02X): %s", func, exc)
+            finally:
+                self._pending = None
+                self._queue.task_done()
+
+            if not caller_fut.done():
+                caller_fut.set_result(result)
+
+    def _on_notification(
+        self, _char: BleakGATTCharacteristic, data: bytearray
+    ) -> None:
+        """Handle an incoming notification from the device."""
+        parsed = parse_response(bytes(data))
+        if self._pending and not self._pending.done():
+            self._pending.set_result(parsed)
+        elif parsed:
+            _LOGGER.debug("Unsolicited notification: func 0x%02X", parsed.get("func"))
+
+    def _on_disconnect(self, _client: BleakClient) -> None:
+        """Called by bleak when the connection is lost unexpectedly."""
+        self._connected = False
+        _LOGGER.warning("Connection lost to %s", self._address)
+        # Cancel any in-flight command future so the caller does not hang.
+        if self._pending and not self._pending.done():
+            self._pending.set_result(None)
+        if self._reconnect_task is None or self._reconnect_task.done():
+            self._reconnect_task = asyncio.ensure_future(self._reconnect())
+
+    async def _reconnect(self) -> None:
+        """Attempt to reconnect with exponential backoff."""
+        delay = _RECONNECT_DELAY_INITIAL
+        while not self._connected:
+            _LOGGER.info(
+                "Attempting reconnect to %s in %.0fs", self._address, delay
+            )
+            await asyncio.sleep(delay)
+            try:
+                await self.connect()
+                return
+            except Exception as exc:
+                _LOGGER.warning("Reconnect failed: %s", exc)
+                delay = min(delay * 2, _RECONNECT_DELAY_MAX)
