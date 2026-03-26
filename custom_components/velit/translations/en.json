@@ -14,10 +14,11 @@
         "description": "Set up {name}?"
       },
       "device_type": {
-        "title": "Select Device Type",
-        "description": "Is this device a heater or an air conditioner?",
+        "title": "Configure Device",
+        "description": "Select the device type and give it a name to identify it in Home Assistant.",
         "data": {
-          "device_type": "Device Type"
+          "device_type": "Device Type",
+          "name": "Device Name"
         }
       }
     },
