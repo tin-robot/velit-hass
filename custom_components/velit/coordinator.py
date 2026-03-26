@@ -21,9 +21,11 @@ from datetime import timedelta
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .ac_client import VelitACClient
+from .const import DOMAIN
 from .heater_client import VelitHeaterClient
 from .packet_utils import fahrenheit_to_celsius
 
@@ -91,6 +93,7 @@ class _VelitBaseCoordinator(DataUpdateCoordinator):
         )
         self._entry = entry
         self._address: str = entry.data["address"]
+        self.domain = DOMAIN
         # Detected on first connect — preserved for the lifetime of the entry.
         self.temp_unit: str = UnitOfTemperature.CELSIUS
 
@@ -135,11 +138,44 @@ class _VelitBaseCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self) -> dict:
         """Called by DataUpdateCoordinator on each poll cycle."""
         try:
-            return await self._async_poll()
+            data = await self._async_poll()
         except UpdateFailed:
             raise
         except Exception as exc:
             raise UpdateFailed(f"Unexpected error polling {self._address}: {exc}") from exc
+
+        self._update_fault_issue(data)
+        return data
+
+    def _update_fault_issue(self, data: dict) -> None:
+        """Raise or clear a Repairs issue based on the current fault code.
+
+        A repair issue is created when fault_code is non-zero so the user sees
+        a prominent alert in Settings → Repairs with the fault description.
+        The issue is auto-resolved when the fault clears.
+        """
+        fault_code = data.get("fault_code", 0)
+        issue_id = f"fault_{self._address}"
+        device_name = self._entry.data.get("name", self._address)
+
+        if fault_code != 0:
+            fault_name = data.get("fault_name", f"Unknown ({fault_code})")
+            ir.async_create_issue(
+                self.hass,
+                self.domain,
+                issue_id,
+                is_fixable=False,
+                severity=ir.IssueSeverity.ERROR,
+                translation_key="device_fault",
+                translation_placeholders={
+                    "device_name": device_name,
+                    "fault_name": fault_name,
+                    "fault_code": str(fault_code),
+                    "fault_code_display": f"E{fault_code:02d}",
+                },
+            )
+        else:
+            ir.async_delete_issue(self.hass, self.domain, issue_id)
 
 
 class VelitHeaterCoordinator(_VelitBaseCoordinator):

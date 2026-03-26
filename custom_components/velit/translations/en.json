@@ -31,6 +31,12 @@
       "no_devices_found": "No Velit devices found nearby"
     }
   },
+  "issues": {
+    "device_fault": {
+      "title": "{device_name}: {fault_code_display} {fault_name}",
+      "description": "The device is reporting **{fault_code_display} — {fault_name}**.\n\nCheck the device and clear the fault before restarting the heater."
+    }
+  },
   "options": {
     "step": {
       "init": {

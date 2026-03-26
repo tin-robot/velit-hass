@@ -11,6 +11,8 @@ import pytest
 from homeassistant.const import UnitOfTemperature
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
+from unittest.mock import call
+
 from custom_components.velit.coordinator import (
     VelitACCoordinator,
     VelitHeaterCoordinator,
@@ -290,3 +292,79 @@ class TestVelitACCoordinatorPoll:
         )
         await coord._async_poll()
         assert coord.temp_unit == UnitOfTemperature.FAHRENHEIT
+
+
+# ---------------------------------------------------------------------------
+# Fault issue registry
+# ---------------------------------------------------------------------------
+
+
+class TestFaultIssueRegistry:
+    def _make_coord(self):
+        hass = _make_hass()
+        entry = _make_entry()
+        with patch("custom_components.velit.coordinator.VelitHeaterClient"):
+            coord = VelitHeaterCoordinator(hass, entry)
+        return coord
+
+    def test_creates_issue_when_fault_active(self):
+        coord = self._make_coord()
+        data = {"fault_code": 1, "fault_name": "Ignition Failure"}
+        with patch(
+            "custom_components.velit.coordinator.ir.async_create_issue"
+        ) as mock_create, patch(
+            "custom_components.velit.coordinator.ir.async_delete_issue"
+        ):
+            coord._update_fault_issue(data)
+            mock_create.assert_called_once()
+            _, args = mock_create.call_args[0], mock_create.call_args
+            assert args[0][1] == "velit"  # domain
+            assert "fault_" in args[0][2]  # issue_id
+
+    def test_deletes_issue_when_fault_clears(self):
+        coord = self._make_coord()
+        data = {"fault_code": 0, "fault_name": "No Fault"}
+        with patch(
+            "custom_components.velit.coordinator.ir.async_delete_issue"
+        ) as mock_delete, patch(
+            "custom_components.velit.coordinator.ir.async_create_issue"
+        ):
+            coord._update_fault_issue(data)
+            mock_delete.assert_called_once()
+
+    def test_no_issue_created_when_no_fault(self):
+        coord = self._make_coord()
+        data = {"fault_code": 0, "fault_name": "No Fault"}
+        with patch(
+            "custom_components.velit.coordinator.ir.async_create_issue"
+        ) as mock_create, patch(
+            "custom_components.velit.coordinator.ir.async_delete_issue"
+        ):
+            coord._update_fault_issue(data)
+            mock_create.assert_not_called()
+
+    def test_issue_placeholders_include_fault_name(self):
+        coord = self._make_coord()
+        data = {"fault_code": 7, "fault_name": "Fuel Pump Fault"}
+        with patch(
+            "custom_components.velit.coordinator.ir.async_create_issue"
+        ) as mock_create, patch(
+            "custom_components.velit.coordinator.ir.async_delete_issue"
+        ):
+            coord._update_fault_issue(data)
+            placeholders = mock_create.call_args.kwargs["translation_placeholders"]
+            assert placeholders["fault_name"] == "Fuel Pump Fault"
+            assert placeholders["fault_code"] == "7"
+            assert placeholders["fault_code_display"] == "E07"
+
+    def test_issue_fault_code_display_zero_padded(self):
+        coord = self._make_coord()
+        data = {"fault_code": 1, "fault_name": "Ignition Failure"}
+        with patch(
+            "custom_components.velit.coordinator.ir.async_create_issue"
+        ) as mock_create, patch(
+            "custom_components.velit.coordinator.ir.async_delete_issue"
+        ):
+            coord._update_fault_issue(data)
+            placeholders = mock_create.call_args.kwargs["translation_placeholders"]
+            assert placeholders["fault_code_display"] == "E01"
