@@ -1,10 +1,18 @@
 """Shared packet utilities for Velit heater and AC protocols.
 
 Temperature handling strategy:
-  The integration always operates devices in Celsius mode. On connect, the
-  coordinator sends one Celsius temperature command to switch the device out
-  of its default Fahrenheit mode. All subsequent sensor readings and set
-  commands use Celsius. HA handles display conversion for users who prefer °F.
+  The integration preserves whatever temperature unit is currently active on
+  the device, to avoid changing what is shown on the physical LCD display.
+
+  On connect the coordinator sends Query 1 (func 0x0A) and infers the active
+  unit from the Set Temperature field in the response:
+    - Value 16–30  → device is in Celsius mode
+    - Value 61–86  → device is in Fahrenheit mode
+    - Anything else → fall back to hass.config.units.temperature_unit
+
+  All subsequent SET commands and sensor decodings use that unit. The
+  coordinator converts to Celsius before reporting to HA so that HA can
+  apply display conversion for users who prefer the other unit.
 
 Two distinct temperature encodings exist in the protocol:
 
