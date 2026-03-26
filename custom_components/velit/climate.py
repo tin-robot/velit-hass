@@ -182,6 +182,13 @@ class VelitHeaterClimateEntity(CoordinatorEntity[VelitHeaterCoordinator], Climat
         return HVACAction.IDLE
 
     @property
+    def icon(self) -> str:
+        """Return alert icon when a fault is active, thermostat icon otherwise."""
+        if self.coordinator.data and self.coordinator.data.get("fault_code", 0) != 0:
+            return "mdi:alert-circle"
+        return "mdi:thermostat"
+
+    @property
     def extra_state_attributes(self) -> dict:
         """Expose machine state and fault as automation-accessible attributes."""
         if self.coordinator.data is None:

@@ -47,6 +47,7 @@ async def async_setup_entry(
     async_add_entities([
         VelitHeaterPrimeFuelPumpButton(coordinator, entry),
         VelitHeaterCleaningButton(coordinator, entry),
+        VelitHeaterDisconnectButton(coordinator, entry),
     ])
 
 
@@ -133,3 +134,37 @@ class VelitHeaterCleaningButton(
         """Send the residual fuel clearance command."""
         await self.coordinator._client.send_command(0x09, bytes([0x00]))
         _LOGGER.debug("Residual fuel clearance command sent")
+
+
+class VelitHeaterDisconnectButton(
+    CoordinatorEntity[VelitHeaterCoordinator], ButtonEntity
+):
+    """Release the BLE connection so another app can use the device.
+
+    Drops the BLE connection and immediately starts the reconnect loop so
+    HA reconnects automatically once the device is available again. Useful
+    for handing control to the Velit mobile app temporarily without
+    restarting the integration.
+    """
+
+    _attr_name = "Disconnect BLE"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:bluetooth-off"
+
+    def __init__(
+        self,
+        coordinator: VelitHeaterCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.data['address']}_disconnect_ble"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.data["address"])},
+            name=entry.data.get(CONF_NAME, entry.data["address"]),
+            manufacturer="Velit",
+        )
+
+    async def async_press(self) -> None:
+        """Release the BLE connection."""
+        await self.coordinator._client.release()
+        _LOGGER.debug("BLE connection released by user via button")

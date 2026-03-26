@@ -156,3 +156,35 @@ def test_prime_button_unique_id():
 def test_cleaning_button_unique_id():
     button, _ = _make_cleaning_button()
     assert button.unique_id == "AA:BB:CC:DD:EE:FF_cleaning"
+
+
+# ---------------------------------------------------------------------------
+# Disconnect BLE button
+# ---------------------------------------------------------------------------
+
+from custom_components.velit.button import VelitHeaterDisconnectButton
+
+
+def _make_disconnect_button():
+    coord = MagicMock()
+    coord._client = MagicMock()
+    coord._client.release = AsyncMock()
+    entry = _make_entry()
+    button = VelitHeaterDisconnectButton.__new__(VelitHeaterDisconnectButton)
+    button.coordinator = coord
+    button._attr_unique_id = f"{entry.data['address']}_disconnect_ble"
+    button._attr_name = "Disconnect BLE"
+    button._attr_device_info = MagicMock()
+    return button, coord
+
+
+@pytest.mark.asyncio
+async def test_disconnect_button_calls_release():
+    button, coord = _make_disconnect_button()
+    await button.async_press()
+    coord._client.release.assert_awaited_once()
+
+
+def test_disconnect_button_unique_id():
+    button, _ = _make_disconnect_button()
+    assert button.unique_id == "AA:BB:CC:DD:EE:FF_disconnect_ble"

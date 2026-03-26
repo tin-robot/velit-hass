@@ -354,3 +354,23 @@ class TestACClimateActions:
         entity, coord = _ac_entity()
         await entity.async_set_fan_mode("1")
         coord.async_request_refresh.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Heater — icon
+# ---------------------------------------------------------------------------
+
+
+class TestHeaterClimateIcon:
+    def test_icon_alert_when_fault_active(self):
+        data = {**_make_heater_coord().data, "fault_code": 1}
+        entity, _ = _heater_entity(data=data)
+        assert entity.icon == "mdi:alert-circle"
+
+    def test_icon_thermostat_when_no_fault(self):
+        entity, _ = _heater_entity()
+        assert entity.icon == "mdi:thermostat"
+
+    def test_icon_thermostat_when_no_data(self):
+        entity, _ = _heater_entity(data=None)
+        assert entity.icon == "mdi:thermostat"
