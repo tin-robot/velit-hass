@@ -181,8 +181,6 @@ class VelitHeaterCoordinator(_VelitBaseCoordinator):
         if q2 is None:
             raise UpdateFailed("No response to Query 2 (0x0B)")
 
-        _LOGGER.debug("Q1 raw data: %s", q1["data"].hex())
-        _LOGGER.debug("Q2 raw data: %s", q2["data"].hex())
         return self._parse(q1["data"], q2["data"])
 
     def _parse(self, q1_data: bytes, q2_data: bytes) -> dict:
