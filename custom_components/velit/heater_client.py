@@ -28,7 +28,7 @@ from typing import Union
 from bleak import BleakClient, BLEDevice
 from bleak.backends.characteristic import BleakGATTCharacteristic
 
-from .const import UUID_READ_NOTIFY, UUID_WRITE
+from .const import HEATER_MASTER_ADDR, HEATER_SLAVE_ADDR, UUID_READ_NOTIFY, UUID_WRITE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -155,14 +155,15 @@ class VelitHeaterClient:
     def __init__(
         self,
         address: Union[str, BLEDevice],
-        master_addr: bytes = bytes([0x00, 0x00, 0x00, 0x01]),
-        slave_addr: bytes = bytes([0x00, 0x00, 0x00, 0x01]),
+        master_addr: bytes = HEATER_MASTER_ADDR,
+        slave_addr: bytes = HEATER_SLAVE_ADDR,
     ) -> None:
         """
         Args:
             address:     BLE device address or BLEDevice from discovery.
-            master_addr: 4-byte address placed in the master field of each packet.
-            slave_addr:  4-byte address placed in the slave field of each packet.
+            master_addr: 4-byte master address (arbitrary — device ignores its value).
+            slave_addr:  4-byte slave address (fixed constant on all known Velit heaters;
+                         device isolation is provided by the BLE connection, not this field).
         """
         self._address = address
         self._master_addr = master_addr
