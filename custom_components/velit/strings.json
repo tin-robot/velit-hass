@@ -40,5 +40,36 @@
         }
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "inlet_temp": {
+        "name": "Inlet Temperature"
+      },
+      "casing_temp": {
+        "name": "Casing Temperature"
+      },
+      "outlet_temp": {
+        "name": "Outlet Temperature"
+      },
+      "voltage": {
+        "name": "Supply Voltage"
+      },
+      "fan_rpm": {
+        "name": "Fan Speed"
+      },
+      "altitude": {
+        "name": "Altitude"
+      },
+      "fault_code": {
+        "name": "Fault"
+      },
+      "machine_state": {
+        "name": "Machine State"
+      },
+      "fault_raw": {
+        "name": "Fault Info (raw)"
+      }
+    }
   }
 }

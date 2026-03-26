@@ -38,6 +38,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             f"Could not connect to Velit device at {entry.data['address']}: {exc}"
         ) from exc
 
+    # Register disconnect before first refresh so it runs even if refresh fails.
+    entry.async_on_unload(coordinator.async_disconnect)
+
     await coordinator.async_config_entry_first_refresh()
 
     entry.runtime_data = coordinator
@@ -48,11 +51,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a Velit config entry."""
-    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    """Unload a Velit config entry.
 
-    if unloaded:
-        coordinator = entry.runtime_data
-        await coordinator.async_disconnect()
-
-    return unloaded
+    Disconnect is handled automatically by the callback registered in
+    async_setup_entry via entry.async_on_unload — no manual cleanup needed here.
+    """
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
