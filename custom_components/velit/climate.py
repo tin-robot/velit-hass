@@ -17,6 +17,7 @@ from typing import Any
 from homeassistant.components.climate import (
     ClimateEntity,
     ClimateEntityFeature,
+    HVACAction,
     HVACMode,
 )
 from homeassistant.config_entries import ConfigEntry
@@ -163,6 +164,37 @@ class VelitHeaterClimateEntity(CoordinatorEntity[VelitHeaterCoordinator], Climat
         if self.coordinator.data is None:
             return None
         return str(self.coordinator.data["current_gear"])
+
+    @property
+    def hvac_action(self) -> HVACAction | None:
+        """Current action shown on the climate card.
+
+        Maps machine state and fault code to an HVACAction so the climate card
+        reflects what the device is doing, not just what mode it is set to.
+        """
+        if self.coordinator.data is None:
+            return None
+        # Any active fault — device is not operational.
+        if self.coordinator.data["fault_code"] != 0:
+            return HVACAction.OFF
+        state = self.coordinator.data["machine_state"]
+        if state == 1:
+            return HVACAction.HEATING
+        if state == 2:
+            # Fan running to cool combustion chamber after shutdown.
+            return HVACAction.FAN
+        # Standby, overtemp standby, cleaning, clean complete — no active output.
+        return HVACAction.IDLE
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Expose machine state and fault as automation-accessible attributes."""
+        if self.coordinator.data is None:
+            return {}
+        return {
+            "machine_state": self.coordinator.data.get("machine_state_str"),
+            "fault": self.coordinator.data.get("fault_name"),
+        }
 
     # ------------------------------------------------------------------
     # Actions — send command then refresh to confirm state

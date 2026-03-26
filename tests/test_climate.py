@@ -9,7 +9,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from homeassistant.components.climate import HVACMode
+from homeassistant.components.climate import HVACAction, HVACMode
 from homeassistant.const import UnitOfTemperature
 
 from custom_components.velit.climate import (
@@ -137,6 +137,40 @@ class TestHeaterClimateState:
     def test_fan_mode(self):
         entity, _ = _heater_entity()
         assert entity.fan_mode == "3"
+
+    def test_hvac_action_heating_when_normal(self):
+        data = {**_make_heater_coord().data, "machine_state": 1, "fault_code": 0}
+        entity, _ = _heater_entity(data=data)
+        assert entity.hvac_action == HVACAction.HEATING
+
+    def test_hvac_action_fan_when_cooling_down(self):
+        data = {**_make_heater_coord().data, "machine_state": 2, "fault_code": 0}
+        entity, _ = _heater_entity(data=data)
+        assert entity.hvac_action == HVACAction.FAN
+
+    def test_hvac_action_idle_when_standby(self):
+        data = {**_make_heater_coord().data, "machine_state": 0, "fault_code": 0}
+        entity, _ = _heater_entity(data=data)
+        assert entity.hvac_action == HVACAction.IDLE
+
+    def test_hvac_action_off_when_fault_active(self):
+        data = {**_make_heater_coord().data, "machine_state": 0, "fault_code": 1}
+        entity, _ = _heater_entity(data=data)
+        assert entity.hvac_action == HVACAction.OFF
+
+    def test_hvac_action_none_when_no_data(self):
+        entity, _ = _heater_entity(data=None)
+        assert entity.hvac_action is None
+
+    def test_extra_state_attributes_contains_machine_state_and_fault(self):
+        entity, _ = _heater_entity()
+        attrs = entity.extra_state_attributes
+        assert attrs["machine_state"] == "Normal"
+        assert attrs["fault"] == "No Fault"
+
+    def test_extra_state_attributes_empty_when_no_data(self):
+        entity, _ = _heater_entity(data=None)
+        assert entity.extra_state_attributes == {}
 
     def test_none_data_returns_none(self):
         entity, _ = _heater_entity(data=None)
