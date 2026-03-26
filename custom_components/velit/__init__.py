@@ -5,20 +5,54 @@ from __future__ import annotations
 import logging
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
+
+from .const import DEVICE_TYPE_HEATER
+from .coordinator import VelitACCoordinator, VelitHeaterCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-# Populated in later phases as platforms are implemented.
-PLATFORMS: list[str] = []
+PLATFORMS: list[Platform] = [Platform.CLIMATE, Platform.SENSOR]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up a Velit device from a config entry."""
-    # Full implementation added in coordinator and entity phases.
+    """Set up a Velit device from a config entry.
+
+    Creates the appropriate coordinator, connects to the device, runs the
+    first data refresh, and forwards setup to all platforms.
+
+    Raises ConfigEntryNotReady if the device cannot be reached on startup —
+    HA will retry automatically with backoff.
+    """
+    if entry.data["device_type"] == DEVICE_TYPE_HEATER:
+        coordinator = VelitHeaterCoordinator(hass, entry)
+    else:
+        coordinator = VelitACCoordinator(hass, entry)
+
+    try:
+        await coordinator.async_connect()
+    except Exception as exc:
+        raise ConfigEntryNotReady(
+            f"Could not connect to Velit device at {entry.data['address']}: {exc}"
+        ) from exc
+
+    await coordinator.async_config_entry_first_refresh()
+
+    entry.runtime_data = coordinator
+
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a Velit config entry."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+    if unloaded:
+        coordinator = entry.runtime_data
+        await coordinator.async_disconnect()
+
+    return unloaded
