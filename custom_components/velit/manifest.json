@@ -10,8 +10,8 @@
   "requirements": [],
   "version": "0.0.1",
   "bluetooth": [
-    {"local_name": "VELIT", "connectable": true},
-    {"local_name": "VLIT", "connectable": true},
-    {"local_name": "D30", "connectable": true}
+    {"local_name": "VELIT*", "connectable": true},
+    {"local_name": "VLIT*", "connectable": true},
+    {"local_name": "D30*", "connectable": true}
   ]
 }
