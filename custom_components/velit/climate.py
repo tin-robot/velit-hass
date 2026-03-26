@@ -82,9 +82,8 @@ class VelitHeaterClimateEntity(CoordinatorEntity[VelitHeaterCoordinator], Climat
     """Climate entity for a Velit heater (protocol V1.02).
 
     HVAC modes:
-      OFF       — heater is shut down
-      HEAT      — heater running (manual or thermostat preset)
-      FAN_ONLY  — ventilation only (func 0x03 / 0x04)
+      OFF   — heater is shut down
+      HEAT  — heater running (manual or thermostat preset)
 
     Presets (only meaningful in HEAT mode):
       manual      — fixed gear, no thermostat
@@ -93,7 +92,7 @@ class VelitHeaterClimateEntity(CoordinatorEntity[VelitHeaterCoordinator], Climat
     Fan modes: gear levels 1–5 (only meaningful in manual mode).
     """
 
-    _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT, HVACMode.FAN_ONLY]
+    _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT]
     _attr_preset_modes = ["manual", "thermostat"]
     _attr_fan_modes = FAN_MODES
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
@@ -132,10 +131,6 @@ class VelitHeaterClimateEntity(CoordinatorEntity[VelitHeaterCoordinator], Climat
         state = self.coordinator.data["machine_state"]
         if state == 0:
             return HVACMode.OFF
-        work_mode = self.coordinator.data["work_mode"]
-        # Gear 0 with no work mode implies ventilation only.
-        if work_mode == 0:
-            return HVACMode.FAN_ONLY
         return HVACMode.HEAT
 
     @property
@@ -203,8 +198,6 @@ class VelitHeaterClimateEntity(CoordinatorEntity[VelitHeaterCoordinator], Climat
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         if hvac_mode == HVACMode.OFF:
             await self.coordinator._client.send_command(0x02, bytes([0x00]))
-        elif hvac_mode == HVACMode.FAN_ONLY:
-            await self.coordinator._client.send_command(0x03, bytes([0x00]))
         elif hvac_mode == HVACMode.HEAT:
             # Start in the currently selected preset mode.
             mode_byte = (

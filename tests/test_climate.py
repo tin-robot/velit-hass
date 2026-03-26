@@ -192,11 +192,6 @@ class TestHeaterClimateActions:
         coord._client.send_command.assert_called_once_with(0x02, bytes([0x00]))
         coord.async_request_refresh.assert_called_once()
 
-    async def test_set_hvac_fan_only(self):
-        entity, coord = _heater_entity()
-        await entity.async_set_hvac_mode(HVACMode.FAN_ONLY)
-        coord._client.send_command.assert_called_once_with(0x03, bytes([0x00]))
-
     async def test_set_hvac_heat_manual(self):
         entity, coord = _heater_entity()
         await entity.async_set_hvac_mode(HVACMode.HEAT)
