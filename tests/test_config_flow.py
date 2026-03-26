@@ -8,9 +8,7 @@ No hardware required — HA test helpers provide mock BLE discovery objects.
 
 from __future__ import annotations
 
-from unittest.mock import patch
 
-import pytest
 from homeassistant import config_entries
 from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
 from homeassistant.const import CONF_ADDRESS, CONF_NAME
