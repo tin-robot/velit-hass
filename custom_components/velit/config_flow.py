@@ -84,8 +84,6 @@ class VelitConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Handle manual entry — user provides the BLE device address."""
-        errors: dict[str, str] = {}
-
         if user_input is not None:
             address = user_input[CONF_ADDRESS]
             await self.async_set_unique_id(address)
@@ -97,7 +95,6 @@ class VelitConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({vol.Required(CONF_ADDRESS): str}),
-            errors=errors,
         )
 
     # ------------------------------------------------------------------

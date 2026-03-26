@@ -20,7 +20,10 @@ from custom_components.velit.heater_client import parse_response as heater_parse
 from custom_components.velit.packet_utils import (
     celsius_to_fahrenheit,
     fahrenheit_to_celsius,
+    hex_to_celsius,
+    hex_to_fahrenheit,
     is_valid_ac_temp_c,
+    is_valid_ac_temp_f,
     is_valid_heater_temp_c,
     is_valid_heater_temp_f,
 )
@@ -311,8 +314,27 @@ class TestTemperatureUtils:
         assert is_valid_heater_temp_f(60) is False
         assert is_valid_heater_temp_f(87) is False
 
+    def test_hex_to_fahrenheit(self):
+        # Offset encoding verified on hardware (2026-03-25): raw - 60 = °F.
+        # Inlet sensor returned 0x0083=131; 131-60=71°F confirmed.
+        assert hex_to_fahrenheit(131) == 71
+        assert hex_to_fahrenheit(60) == 0    # lower bound of protocol range
+
+    def test_hex_to_celsius(self):
+        # Offset encoding per protocol doc: raw - 50 = °C.
+        assert hex_to_celsius(50) == 0       # 0°C
+        assert hex_to_celsius(71) == 21      # 21°C (≈ 71°F, expected room temp)
+        assert hex_to_celsius(250) == 200    # upper bound of protocol range
+
     def test_ac_valid_celsius_range(self):
         assert is_valid_ac_temp_c(17) is True
         assert is_valid_ac_temp_c(30) is True
         assert is_valid_ac_temp_c(16) is False
         assert is_valid_ac_temp_c(31) is False
+
+    def test_ac_valid_fahrenheit_range(self):
+        # AC minimum is 17°C = 62.6°F → 63°F integer minimum.
+        assert is_valid_ac_temp_f(63) is True
+        assert is_valid_ac_temp_f(86) is True
+        assert is_valid_ac_temp_f(62) is False
+        assert is_valid_ac_temp_f(87) is False

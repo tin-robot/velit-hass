@@ -14,16 +14,16 @@ high byte first. Verified against 11 of 12 protocol examples — the shutdown
 command example (func 0x02) appears to contain a typo in the source document
 and does not match the formula. Hardware verification required.
 
-Open question: the 4-byte master/slave addresses used in the protocol are not
-the same as BLE MAC addresses (which are 6 bytes). How these addresses are
-assigned or discovered is not yet known. Needs hardware investigation.
+Addressing: slave address 0x0000002D is a fixed constant on all known Velit
+heaters — verified on hardware (2026-03-25). Master address is arbitrary.
+Device isolation is provided by the BLE connection, not protocol addressing.
+See HEATER_MASTER_ADDR / HEATER_SLAVE_ADDR in const.py.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Union
 
 from bleak import BleakClient, BLEDevice
 from bleak.backends.characteristic import BleakGATTCharacteristic
@@ -145,16 +145,14 @@ class VelitHeaterClient:
 
     Manages connection, command serialisation, and notification handling.
 
-    Open question: the 4-byte master/slave addresses used in the packet
-    framing are not the same as BLE MAC addresses. How they are assigned
-    or derived is not yet known — hardware investigation required.
-    The constructor accepts them explicitly so the discover tool can probe
-    different values until the device responds.
+    Slave address 0x0000002D is a fixed constant on all known Velit heaters
+    (verified on hardware, 2026-03-25). Master address is arbitrary. Both
+    default to the confirmed values from const.py.
     """
 
     def __init__(
         self,
-        address: Union[str, BLEDevice],
+        address: str | BLEDevice,
         master_addr: bytes = HEATER_MASTER_ADDR,
         slave_addr: bytes = HEATER_SLAVE_ADDR,
     ) -> None:
@@ -191,7 +189,7 @@ class VelitHeaterClient:
         await self._client.connect()
         await self._client.start_notify(UUID_READ_NOTIFY, self._on_notification)
         self._connected = True
-        self._queue_task = asyncio.ensure_future(self._queue_runner())
+        self._queue_task = asyncio.create_task(self._queue_runner())
         _LOGGER.info("Connected to %s", self._address)
 
     async def disconnect(self) -> None:
@@ -296,7 +294,7 @@ class VelitHeaterClient:
         if self._pending and not self._pending.done():
             self._pending.set_result(None)
         if self._reconnect_task is None or self._reconnect_task.done():
-            self._reconnect_task = asyncio.ensure_future(self._reconnect())
+            self._reconnect_task = asyncio.create_task(self._reconnect())
 
     async def _reconnect(self) -> None:
         """Attempt to reconnect with exponential backoff."""

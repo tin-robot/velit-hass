@@ -1,4 +1,23 @@
-"""Shared packet utilities for Velit heater and AC protocols."""
+"""Shared packet utilities for Velit heater and AC protocols.
+
+Temperature handling strategy:
+  The integration always operates devices in Celsius mode. On connect, the
+  coordinator sends one Celsius temperature command to switch the device out
+  of its default Fahrenheit mode. All subsequent sensor readings and set
+  commands use Celsius. HA handles display conversion for users who prefer °F.
+
+Two distinct temperature encodings exist in the protocol:
+
+  SET commands (func 0x08):
+    The data byte is the raw integer temperature value — no offset.
+    celsius_to_hex / fahrenheit_to_hex are identity functions by design.
+
+  QUERY responses (Query 2, func 0x0B):
+    Sensor readings use an offset encoding verified on hardware:
+      Celsius mode:    raw - 50 = °C   (range 0–250 maps to -50°C–200°C)
+      Fahrenheit mode: raw - 60 = °F   (range 0–700 maps to -60°F–640°F)
+    hex_to_celsius / hex_to_fahrenheit apply these offsets.
+"""
 
 from __future__ import annotations
 
@@ -11,27 +30,39 @@ from .const import (
 
 
 def celsius_to_hex(temp_c: int) -> int:
-    """Return the hex value transmitted for a Celsius temperature.
+    """Return the byte value to transmit for a Celsius SET command.
 
-    Both devices transmit the raw integer degree value as a single hex byte.
-    Formula: F = 1.8 * C + 32 (used when transmitting Fahrenheit instead).
+    The protocol transmits the raw integer degree value — no offset applied.
     """
     return temp_c
 
 
 def fahrenheit_to_hex(temp_f: int) -> int:
-    """Return the hex value transmitted for a Fahrenheit temperature."""
+    """Return the byte value to transmit for a Fahrenheit SET command.
+
+    The protocol transmits the raw integer degree value — no offset applied.
+    Retained for completeness; the integration operates in Celsius mode.
+    """
     return temp_f
 
 
 def hex_to_celsius(value: int) -> int:
-    """Convert a received hex temperature value to Celsius."""
-    return value
+    """Decode a raw sensor temperature value (from Query 2) to Celsius.
+
+    Applies the protocol offset: raw - 50 = °C.
+    Verified on hardware: device in Celsius mode.
+    """
+    return value - 50
 
 
 def hex_to_fahrenheit(value: int) -> int:
-    """Convert a received hex temperature value to Fahrenheit."""
-    return value
+    """Decode a raw sensor temperature value (from Query 2) to Fahrenheit.
+
+    Applies the protocol offset: raw - 60 = °F.
+    Verified on hardware (2026-03-25): inlet 0x0083=131, 131-60=71°F confirmed.
+    Retained for completeness; the integration operates in Celsius mode.
+    """
+    return value - 60
 
 
 def celsius_to_fahrenheit(temp_c: float) -> float:
@@ -52,7 +83,8 @@ def is_valid_heater_temp_c(temp_c: int) -> bool:
 def is_valid_heater_temp_f(temp_f: int) -> bool:
     """Return True if the temperature is within the heater's Fahrenheit range.
 
-    F range per protocol: 61–86°F (hex 0x3D–0x56).
+    F range: 61–86°F (16–30°C converted). Hex: 0x3D–0x56.
+    Retained for completeness; the integration operates in Celsius mode.
     """
     return 61 <= temp_f <= 86
 
@@ -65,6 +97,7 @@ def is_valid_ac_temp_c(temp_c: int) -> bool:
 def is_valid_ac_temp_f(temp_f: int) -> bool:
     """Return True if the temperature is within the AC's Fahrenheit range.
 
-    F range per protocol: 61–86°F (hex 0x3D–0x56).
+    F range: 63–86°F (17–30°C converted: 17°C = 62.6°F → 63°F minimum).
+    Retained for completeness; the integration operates in Celsius mode.
     """
-    return 61 <= temp_f <= 86
+    return 63 <= temp_f <= 86

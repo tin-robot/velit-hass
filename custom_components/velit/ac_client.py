@@ -27,7 +27,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Union
 
 from bleak import BleakClient, BLEDevice
 from bleak.backends.characteristic import BleakGATTCharacteristic
@@ -151,7 +150,7 @@ class VelitACClient:
 
     def __init__(
         self,
-        address: Union[str, BLEDevice],
+        address: str | BLEDevice,
         product_code: int = DEFAULT_PRODUCT_CODE,
     ) -> None:
         """
@@ -188,7 +187,7 @@ class VelitACClient:
         self._connected = True
         self.unavailable = False
         self._consecutive_failures = 0
-        self._queue_task = asyncio.ensure_future(self._queue_runner())
+        self._queue_task = asyncio.create_task(self._queue_runner())
         _LOGGER.info("Connected to %s", self._address)
 
     async def disconnect(self) -> None:
@@ -348,7 +347,7 @@ class VelitACClient:
         if self._pending and not self._pending.done():
             self._pending.set_result(None)
         if self._reconnect_task is None or self._reconnect_task.done():
-            self._reconnect_task = asyncio.ensure_future(self._reconnect())
+            self._reconnect_task = asyncio.create_task(self._reconnect())
 
     async def _reconnect(self) -> None:
         """Attempt to reconnect with exponential backoff."""
