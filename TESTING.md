@@ -42,7 +42,7 @@ please run through the relevant checklist below and note your results in the PR.
 ### Setup
 
 Install the integration on a Home Assistant instance with a Bluetooth adapter
-within range of your device. See [README.md](../README.md) for install steps.
+within range of your device. See [README.md](README.md) for install steps.
 
 ### Heater Checklist
 
