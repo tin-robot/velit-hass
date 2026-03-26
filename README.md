@@ -131,9 +131,3 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for branching, commit, and testing guidel
 
 Issues and pull requests are welcome at https://github.com/JohnFreeborg/velit-hass
 
----
-
-## Protocol
-
-This integration was developed with protocol information shared by Velit.
-Please do not redistribute protocol details found in the code.
