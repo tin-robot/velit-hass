@@ -52,6 +52,11 @@ class TestBLESwitchState:
         entity, _ = _make_entity(connected=False)
         assert entity.is_on is False
 
+    def test_always_available(self):
+        # Must return True even when disconnected so the user can toggle back on.
+        entity, _ = _make_entity(connected=False)
+        assert entity.available is True
+
 
 # ---------------------------------------------------------------------------
 # Actions

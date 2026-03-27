@@ -71,6 +71,14 @@ class VelitHeaterBLESwitch(CoordinatorEntity[VelitHeaterCoordinator], SwitchEnti
         )
 
     @property
+    def available(self) -> bool:
+        # The switch reflects raw BLE connection state — it must remain
+        # interactive even when the coordinator cannot poll (i.e. when the
+        # user has turned it off). Returning True unconditionally keeps it
+        # tappable so the user can reconnect.
+        return True
+
+    @property
     def is_on(self) -> bool:
         return self.coordinator._client.connected
 
