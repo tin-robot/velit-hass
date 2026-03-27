@@ -112,7 +112,7 @@ class VelitHeaterCleaningButton(
     system. No stop command is required; the device manages the sequence.
     """
 
-    _attr_name = "Clean (Residual Fuel Clearance)"
+    _attr_name = "Cleaning"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:broom"
 
