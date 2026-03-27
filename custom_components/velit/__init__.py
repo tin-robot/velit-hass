@@ -47,6 +47,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    # Reload the entry when the user changes options so the coordinator picks
+    # up the new poll interval and the climate entity re-evaluates availability.
+    entry.async_on_unload(entry.add_update_listener(
+        lambda h, e: h.config_entries.async_reload(e.entry_id)
+    ))
+
     return True
 
 

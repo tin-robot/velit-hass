@@ -25,13 +25,13 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .ac_client import VelitACClient
-from .const import DOMAIN
+from .const import CONF_POLL_INTERVAL, DOMAIN
 from .heater_client import VelitHeaterClient
 from .packet_utils import fahrenheit_to_celsius
 
 _LOGGER = logging.getLogger(__name__)
 
-POLL_INTERVAL = timedelta(seconds=30)
+POLL_INTERVAL_DEFAULT = 30  # seconds
 
 # Setpoint ranges used to infer whether the device is in Celsius or Fahrenheit mode.
 # These ranges are non-overlapping so the unit can be determined unambiguously.
@@ -84,11 +84,12 @@ class _VelitBaseCoordinator(DataUpdateCoordinator):
         entry: ConfigEntry,
         name: str,
     ) -> None:
+        poll_seconds = entry.options.get(CONF_POLL_INTERVAL, POLL_INTERVAL_DEFAULT)
         super().__init__(
             hass,
             _LOGGER,
             name=name,
-            update_interval=POLL_INTERVAL,
+            update_interval=timedelta(seconds=poll_seconds),
             always_update=False,
         )
         self._entry = entry
@@ -173,6 +174,7 @@ class _VelitBaseCoordinator(DataUpdateCoordinator):
                     "fault_code": str(fault_code),
                     "fault_code_display": f"E{fault_code:02d}",
                 },
+                learn_more_url="https://velitcamping.com/pages/velit-heater-error-code-guide",
             )
         else:
             ir.async_delete_issue(self.hass, self.domain, issue_id)

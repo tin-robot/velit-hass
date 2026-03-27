@@ -42,7 +42,8 @@
       "init": {
         "title": "Velit Options",
         "data": {
-          "poll_interval": "Poll interval (seconds)"
+          "poll_interval": "Poll interval (seconds)",
+          "unavailable_on_fault": "Show device as unavailable when fault is active"
         }
       }
     }
@@ -53,7 +54,7 @@
         "name": "Prime Fuel Pump"
       },
       "cleaning": {
-        "name": "Clean (Residual Fuel Clearance)"
+        "name": "Cleaning"
       }
     },
     "switch": {

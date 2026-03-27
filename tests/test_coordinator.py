@@ -25,6 +25,7 @@ from custom_components.velit.coordinator import (
 def _make_entry(device_type: str = "heater", address: str = "AA:BB:CC:DD:EE:FF"):
     entry = MagicMock()
     entry.data = {"device_type": device_type, "address": address, "name": "Test"}
+    entry.options = {}
     return entry
 
 

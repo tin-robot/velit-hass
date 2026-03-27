@@ -2,6 +2,10 @@
 
 DOMAIN = "velit"
 
+# Options keys — stored in config entry options dict.
+CONF_POLL_INTERVAL = "poll_interval"
+CONF_UNAVAILABLE_ON_FAULT = "unavailable_on_fault"
+
 # Device type identifiers stored in config entry data.
 # Determined during config flow — cannot be inferred from BLE advertisement alone (open question).
 DEVICE_TYPE_HEATER = "heater"

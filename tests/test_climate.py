@@ -26,9 +26,10 @@ from custom_components.velit.climate import (
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_entry(device_type="heater", address="AA:BB:CC:DD:EE:FF"):
+def _make_entry(device_type="heater", address="AA:BB:CC:DD:EE:FF", options=None):
     entry = MagicMock()
     entry.data = {"device_type": device_type, "address": address, "name": "Test Heater"}
+    entry.options = options if options is not None else {}
     return entry
 
 
@@ -78,9 +79,9 @@ def _make_ac_coord(data=_UNSET, temp_unit=UnitOfTemperature.CELSIUS):
     return coord
 
 
-def _heater_entity(data=_UNSET, temp_unit=UnitOfTemperature.CELSIUS):
+def _heater_entity(data=_UNSET, temp_unit=UnitOfTemperature.CELSIUS, options=None):
     coord = _make_heater_coord(data, temp_unit)
-    entry = _make_entry()
+    entry = _make_entry(options=options)
     entity = VelitHeaterClimateEntity.__new__(VelitHeaterClimateEntity)
     entity.coordinator = coord
     entity._entry = entry
@@ -374,3 +375,32 @@ class TestHeaterClimateIcon:
     def test_icon_thermostat_when_no_data(self):
         entity, _ = _heater_entity(data=None)
         assert entity.icon == "mdi:thermostat"
+
+
+# ---------------------------------------------------------------------------
+# Heater — available (unavailable_on_fault option)
+# ---------------------------------------------------------------------------
+
+
+class TestHeaterClimateAvailable:
+    def test_available_by_default_even_with_fault(self):
+        """Option defaults off — entity stays available on fault."""
+        data = {**_make_heater_coord().data, "fault_code": 1}
+        entity, _ = _heater_entity(data=data)
+        assert entity.available is True
+
+    def test_unavailable_when_option_enabled_and_fault_active(self):
+        from custom_components.velit.const import CONF_UNAVAILABLE_ON_FAULT
+        data = {**_make_heater_coord().data, "fault_code": 3}
+        entity, _ = _heater_entity(data=data, options={CONF_UNAVAILABLE_ON_FAULT: True})
+        assert entity.available is False
+
+    def test_available_when_option_enabled_but_no_fault(self):
+        from custom_components.velit.const import CONF_UNAVAILABLE_ON_FAULT
+        entity, _ = _heater_entity(options={CONF_UNAVAILABLE_ON_FAULT: True})
+        assert entity.available is True
+
+    def test_available_when_option_enabled_but_no_data(self):
+        from custom_components.velit.const import CONF_UNAVAILABLE_ON_FAULT
+        entity, _ = _heater_entity(data=None, options={CONF_UNAVAILABLE_ON_FAULT: True})
+        assert entity.available is True

@@ -28,6 +28,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    CONF_UNAVAILABLE_ON_FAULT,
     DEVICE_TYPE_HEATER,
     DOMAIN,
     HEATER_MAX_TEMP_C,
@@ -123,6 +124,15 @@ class VelitHeaterClimateEntity(CoordinatorEntity[VelitHeaterCoordinator], Climat
     # ------------------------------------------------------------------
     # State properties — read from coordinator data, never from device
     # ------------------------------------------------------------------
+
+    @property
+    def available(self) -> bool:
+        if not super().available:
+            return False
+        if self._entry.options.get(CONF_UNAVAILABLE_ON_FAULT, False):
+            if self.coordinator.data and self.coordinator.data.get("fault_code", 0) != 0:
+                return False
+        return True
 
     @property
     def hvac_mode(self) -> HVACMode | None:

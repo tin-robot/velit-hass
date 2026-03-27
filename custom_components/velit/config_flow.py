@@ -19,16 +19,20 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_ADDRESS, CONF_NAME
 from homeassistant.helpers.selector import (
+    BooleanSelector,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
     TextSelector,
 )
 
-from .const import DEVICE_TYPE_AC, DEVICE_TYPE_HEATER, DOMAIN
+from .const import CONF_POLL_INTERVAL, CONF_UNAVAILABLE_ON_FAULT, DEVICE_TYPE_AC, DEVICE_TYPE_HEATER, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,6 +41,10 @@ class VelitConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle the Velit config flow."""
 
     VERSION = 1
+
+    @staticmethod
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        return VelitOptionsFlow(config_entry)
 
     def __init__(self) -> None:
         self._address: str = ""
@@ -136,6 +144,38 @@ class VelitConfigFlow(ConfigFlow, domain=DOMAIN):
                         )
                     ),
                     vol.Required(CONF_NAME, default=self._name): TextSelector(),
+                }
+            ),
+        )
+
+
+class VelitOptionsFlow(OptionsFlow):
+    """Handle Velit integration options."""
+
+    def __init__(self, config_entry: ConfigEntry) -> None:
+        self._config_entry = config_entry
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            return self.async_create_entry(data=user_input)
+
+        current = self._config_entry.options
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_POLL_INTERVAL,
+                        default=current.get(CONF_POLL_INTERVAL, 30),
+                    ): NumberSelector(NumberSelectorConfig(
+                        min=5, max=300, step=1, mode=NumberSelectorMode.BOX,
+                    )),
+                    vol.Required(
+                        CONF_UNAVAILABLE_ON_FAULT,
+                        default=current.get(CONF_UNAVAILABLE_ON_FAULT, False),
+                    ): BooleanSelector(),
                 }
             ),
         )
