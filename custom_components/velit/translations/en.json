@@ -54,9 +54,11 @@
       },
       "cleaning": {
         "name": "Clean (Residual Fuel Clearance)"
-      },
-      "disconnect_ble": {
-        "name": "Disconnect BLE"
+      }
+    },
+    "switch": {
+      "ble_connection": {
+        "name": "BLE Connection"
       }
     },
     "sensor": {

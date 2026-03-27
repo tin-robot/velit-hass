@@ -220,6 +220,11 @@ class VelitACClient:
 
         _LOGGER.info("Disconnected from %s", self._address)
 
+    @property
+    def connected(self) -> bool:
+        """Return True when the BLE connection is established and ready."""
+        return self._connected
+
     async def send_command(
         self,
         func: int,

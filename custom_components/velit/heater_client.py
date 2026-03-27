@@ -222,28 +222,10 @@ class VelitHeaterClient:
 
         _LOGGER.info("Disconnected from %s", self._address)
 
-    async def release(self) -> None:
-        """Drop the BLE connection and immediately start reconnecting.
-
-        Intended for the user-facing disconnect button — lets other apps
-        (e.g. the Velit mobile app) grab the device while HA reconnects
-        automatically in the background once the device becomes available.
-        """
-        self._connected = False
-
-        if self._queue_task and not self._queue_task.done():
-            self._queue_task.cancel()
-
-        if self._client and self._client.is_connected:
-            try:
-                await self._client.stop_notify(UUID_READ_NOTIFY)
-            except Exception:
-                pass
-            await self._client.disconnect()
-
-        _LOGGER.info("BLE connection released by user; reconnect loop started")
-        if self._reconnect_task is None or self._reconnect_task.done():
-            self._reconnect_task = asyncio.create_task(self._reconnect())
+    @property
+    def connected(self) -> bool:
+        """Return True when the BLE connection is established and ready."""
+        return self._connected
 
     async def send_command(
         self, func: int, data: bytes, timeout: float = _COMMAND_TIMEOUT
