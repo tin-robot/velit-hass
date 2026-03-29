@@ -8,6 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import entity_registry as er
 
 from .const import DEVICE_TYPE_HEATER
 from .coordinator import VelitACCoordinator, VelitHeaterCoordinator
@@ -28,6 +29,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """
     if entry.data["device_type"] == DEVICE_TYPE_HEATER:
         coordinator = VelitHeaterCoordinator(hass, entry)
+        _remove_stale_entities(hass, entry)
     else:
         coordinator = VelitACCoordinator(hass, entry)
 
@@ -54,6 +56,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     ))
 
     return True
+
+
+def _remove_stale_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Remove entity registry entries that no longer exist in the integration.
+
+    Called on every setup so upgrades from older versions clean up automatically.
+    Add entries here whenever an entity is removed or renamed between releases.
+    """
+    registry = er.async_get(hass)
+    address = entry.data["address"]
+
+    # Fuel pump prime was a button in earlier versions; replaced by a switch.
+    stale = registry.async_get_entity_id("button", entry.domain, f"{address}_prime_fuel_pump")
+    if stale:
+        registry.async_remove(stale)
+        _LOGGER.debug("Removed stale entity %s from registry", stale)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
