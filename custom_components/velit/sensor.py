@@ -37,6 +37,7 @@ from homeassistant.const import (
     UnitOfFrequency,
     UnitOfPower,
     UnitOfTemperature,
+    UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
@@ -148,10 +149,11 @@ async def async_setup_entry(
     coordinator = entry.runtime_data
 
     if entry.data["device_type"] == DEVICE_TYPE_HEATER:
-        async_add_entities(
-            VelitHeaterSensorEntity(coordinator, entry, description)
-            for description in HEATER_SENSORS
-        )
+        async_add_entities([
+            *(VelitHeaterSensorEntity(coordinator, entry, description)
+              for description in HEATER_SENSORS),
+            VelitHeaterPrimeCountdownSensor(coordinator, entry),
+        ])
     else:
         async_add_entities([VelitACFaultSensorEntity(coordinator, entry)])
 
@@ -186,6 +188,42 @@ class VelitHeaterSensorEntity(CoordinatorEntity[VelitHeaterCoordinator], SensorE
         if self.coordinator.data is None:
             return None
         return self.coordinator.data.get(self.entity_description.data_key)
+
+
+class VelitHeaterPrimeCountdownSensor(SensorEntity):
+    """Counts down seconds remaining in the fuel pump prime cycle.
+
+    Updated every second by the prime switch's tick callbacks rather than by
+    the coordinator poll, so the display ticks in real time during the 30s
+    prime sequence. Reads prime state from the coordinator so it shares state
+    with the switch without any direct entity-to-entity coupling.
+    """
+
+    _attr_name = "Fuel Pump Prime Remaining"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:timer-outline"
+    _attr_native_unit_of_measurement = UnitOfTime.SECONDS
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self,
+        coordinator: VelitHeaterCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        self._coordinator = coordinator
+        self._attr_unique_id = f"{entry.data['address']}_prime_countdown"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.data["address"])},
+            name=entry.data.get(CONF_NAME, entry.data["address"]),
+            manufacturer="Velit",
+        )
+        # Register for per-second ticks from the prime switch.
+        coordinator.register_prime_tick(self.async_write_ha_state)
+
+    @property
+    def native_value(self) -> int:
+        return self._coordinator.prime_remaining
 
 
 class VelitACFaultSensorEntity(CoordinatorEntity[VelitACCoordinator], SensorEntity):

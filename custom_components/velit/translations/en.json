@@ -50,9 +50,6 @@
   },
   "entity": {
     "button": {
-      "prime_fuel_pump": {
-        "name": "Prime Fuel Pump"
-      },
       "cleaning": {
         "name": "Cleaning"
       }
@@ -60,6 +57,14 @@
     "switch": {
       "ble_connection": {
         "name": "BLE Connection"
+      },
+      "fuel_priming": {
+        "name": "Fuel Pump Prime"
+      }
+    },
+    "sensor": {
+      "prime_countdown": {
+        "name": "Fuel Pump Prime Remaining"
       }
     },
     "sensor": {

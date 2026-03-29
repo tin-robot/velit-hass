@@ -97,6 +97,20 @@ class _VelitBaseCoordinator(DataUpdateCoordinator):
         self.domain = DOMAIN
         # Detected on first connect — preserved for the lifetime of the entry.
         self.temp_unit: str = UnitOfTemperature.CELSIUS
+        # Prime pump state — owned by VelitHeaterFuelPrimingSwitch, read by the
+        # countdown sensor. Stored here so both entities share it without coupling.
+        self.priming: bool = False
+        self.prime_remaining: int = 0
+        self._prime_tick_callbacks: list = []
+
+    def register_prime_tick(self, callback) -> None:
+        """Register a callback to fire on each prime countdown tick."""
+        self._prime_tick_callbacks.append(callback)
+
+    def _notify_prime_tick(self) -> None:
+        """Notify all registered prime tick listeners (e.g. countdown sensor)."""
+        for cb in self._prime_tick_callbacks:
+            cb()
 
     async def async_connect(self) -> None:
         """Connect the BLE client. Called from async_setup_entry."""

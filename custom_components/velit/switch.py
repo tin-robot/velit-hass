@@ -13,11 +13,12 @@ AC:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_NAME
+from homeassistant.const import CONF_NAME, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -39,7 +40,10 @@ async def async_setup_entry(
         return
 
     coordinator: VelitHeaterCoordinator = entry.runtime_data
-    async_add_entities([VelitHeaterBLESwitch(coordinator, entry)])
+    async_add_entities([
+        VelitHeaterBLESwitch(coordinator, entry),
+        VelitHeaterFuelPrimingSwitch(coordinator, entry),
+    ])
 
 
 class VelitHeaterBLESwitch(CoordinatorEntity[VelitHeaterCoordinator], SwitchEntity):
@@ -95,3 +99,82 @@ class VelitHeaterBLESwitch(CoordinatorEntity[VelitHeaterCoordinator], SwitchEnti
         """Disconnect from the device and suppress automatic reconnection."""
         await self.coordinator._client.disconnect()
         self.async_write_ha_state()
+
+
+_PRIME_DURATION = 30  # seconds — matches physical hardware button auto-stop
+
+
+class VelitHeaterFuelPrimingSwitch(CoordinatorEntity[VelitHeaterCoordinator], SwitchEntity):
+    """Toggle switch for the fuel pump prime cycle.
+
+    On  — prime cycle running; auto-stops after 30 seconds.
+    Off — idle; turning off early sends the stop command immediately.
+
+    Prime state is stored on the coordinator so the companion countdown
+    sensor can read it without coupling directly to this entity.
+    """
+
+    _attr_name = "Fuel Pump Prime"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:fuel"
+
+    def __init__(
+        self,
+        coordinator: VelitHeaterCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.data['address']}_fuel_priming"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.data["address"])},
+            name=entry.data.get(CONF_NAME, entry.data["address"]),
+            manufacturer="Velit",
+        )
+        self._prime_task: asyncio.Task | None = None
+
+    @property
+    def available(self) -> bool:
+        # Readable and pressable whenever BLE is connected.
+        return self.coordinator._client.connected
+
+    @property
+    def is_on(self) -> bool:
+        return self.coordinator.priming
+
+    async def async_turn_on(self, **kwargs) -> None:
+        """Start the fuel pump prime cycle."""
+        if self.coordinator.priming:
+            return
+        await self.coordinator._client.send_command(0x05, bytes([0x00]))
+        self.coordinator.priming = True
+        self.coordinator.prime_remaining = _PRIME_DURATION
+        self._prime_task = asyncio.create_task(self._run_prime())
+        self.async_write_ha_state()
+        self.coordinator._notify_prime_tick()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        """Stop the prime cycle early — cancels the task which sends the stop command."""
+        if not self.coordinator.priming:
+            return
+        if self._prime_task and not self._prime_task.done():
+            self._prime_task.cancel()
+
+    async def _run_prime(self) -> None:
+        """Countdown task — ticks every second, sends stop on completion or cancellation."""
+        try:
+            while self.coordinator.prime_remaining > 0:
+                await asyncio.sleep(1)
+                self.coordinator.prime_remaining -= 1
+                self.async_write_ha_state()
+                self.coordinator._notify_prime_tick()
+            await self.coordinator._client.send_command(0x06, bytes([0x00]))
+            _LOGGER.debug("Fuel pump prime auto-stopped after %ds", _PRIME_DURATION)
+        except asyncio.CancelledError:
+            await self.coordinator._client.send_command(0x06, bytes([0x00]))
+            _LOGGER.debug("Fuel pump prime stopped early by user")
+        finally:
+            self.coordinator.priming = False
+            self.coordinator.prime_remaining = 0
+            self._prime_task = None
+            self.async_write_ha_state()
+            self.coordinator._notify_prime_tick()
