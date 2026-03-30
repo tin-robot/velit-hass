@@ -1,6 +1,5 @@
 {
   "name": "Velit",
   "domains": ["velit"],
-  "documentation": "https://github.com/JohnFreeborg/velit-hass",
   "homeassistant": "2024.1.0"
 }
