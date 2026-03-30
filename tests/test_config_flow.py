@@ -8,9 +8,6 @@ No hardware required — HA test helpers provide mock BLE discovery objects.
 
 from __future__ import annotations
 
-import sys
-
-import pytest
 from homeassistant import config_entries
 from homeassistant.components.bluetooth import BluetoothServiceInfoBleak
 from homeassistant.const import CONF_ADDRESS, CONF_NAME
@@ -18,11 +15,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.velit.const import DEVICE_TYPE_AC, DEVICE_TYPE_HEATER, DOMAIN
-
-pytestmark = pytest.mark.skipif(
-    sys.platform != "linux",
-    reason="dbus required for bluetooth stack setup",
-)
 
 # ---------------------------------------------------------------------------
 # Test fixtures
@@ -58,7 +50,7 @@ def _make_discovery(address: str, name: str) -> BluetoothServiceInfoBleak:
 # ---------------------------------------------------------------------------
 
 
-async def test_bluetooth_discovery_full_flow(hass: HomeAssistant, enable_bluetooth: None) -> None:
+async def test_bluetooth_discovery_full_flow(hass: HomeAssistant) -> None:
     """Discovery → confirm → device type + name → entry created."""
     discovery = _make_discovery(HEATER_ADDRESS, HEATER_NAME)
 
@@ -89,7 +81,7 @@ async def test_bluetooth_discovery_full_flow(hass: HomeAssistant, enable_bluetoo
     }
 
 
-async def test_bluetooth_discovery_ac(hass: HomeAssistant, enable_bluetooth: None) -> None:
+async def test_bluetooth_discovery_ac(hass: HomeAssistant) -> None:
     """Discovery flow correctly stores AC device type."""
     discovery = _make_discovery(AC_ADDRESS, AC_NAME)
 
@@ -109,7 +101,7 @@ async def test_bluetooth_discovery_ac(hass: HomeAssistant, enable_bluetooth: Non
     assert result["data"]["device_type"] == DEVICE_TYPE_AC
 
 
-async def test_bluetooth_discovery_duplicate_aborts(hass: HomeAssistant, enable_bluetooth: None) -> None:
+async def test_bluetooth_discovery_duplicate_aborts(hass: HomeAssistant) -> None:
     """A second discovery for the same address aborts as already_configured."""
     discovery = _make_discovery(HEATER_ADDRESS, HEATER_NAME)
 
@@ -137,7 +129,7 @@ async def test_bluetooth_discovery_duplicate_aborts(hass: HomeAssistant, enable_
     assert result["reason"] == "already_configured"
 
 
-async def test_bluetooth_two_different_devices(hass: HomeAssistant, enable_bluetooth: None) -> None:
+async def test_bluetooth_two_different_devices(hass: HomeAssistant) -> None:
     """Two different BLE addresses each produce a separate config entry."""
     for address, name, device_type, label in [
         (HEATER_ADDRESS, HEATER_NAME, DEVICE_TYPE_HEATER, "Heater"),

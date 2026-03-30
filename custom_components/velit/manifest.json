@@ -8,7 +8,7 @@
   ],
   "codeowners": ["@JohnFreeborg", "@jeremyroe"],
   "config_flow": true,
-  "dependencies": ["bluetooth"],
+  "after_dependencies": ["bluetooth"],
   "documentation": "https://github.com/JohnFreeborg/velit-hass",
   "integration_type": "device",
   "iot_class": "local_polling",
