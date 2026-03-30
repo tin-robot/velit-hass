@@ -2,6 +2,10 @@
 
 DOMAIN = "velit"
 
+# Options keys — stored in config entry options dict.
+CONF_POLL_INTERVAL = "poll_interval"
+CONF_UNAVAILABLE_ON_FAULT = "unavailable_on_fault"
+
 # Device type identifiers stored in config entry data.
 # Determined during config flow — cannot be inferred from BLE advertisement alone (open question).
 DEVICE_TYPE_HEATER = "heater"
@@ -21,6 +25,17 @@ BLE_LOCAL_NAMES = ["VELIT", "VLIT", "D30"]
 HEATER_START_BYTE = 0x55
 HEATER_RESPONSE_START = 0xAA
 HEATER_MFG_CODE = bytes([0x53, 0x46])  # "SF" — validated in every heater response
+
+# Heater packet addressing — verified on hardware (2026-03-25, Velit 4000P).
+# The slave address 0x0000002D is a fixed constant on all known Velit heaters — it is NOT
+# derived from the BLE MAC address and does not uniquely identify a device at the protocol
+# level. Device isolation is provided entirely by the BLE connection (we connect to a specific
+# BLE address); the slave address in the packet is effectively a protocol constant.
+# The master address is arbitrary — the device responds regardless of its value.
+# Cross-device contamination (reported in campsite scenarios) is a Velit app issue caused by
+# connecting to the wrong BLE device, not a protocol addressing issue.
+HEATER_MASTER_ADDR = bytes([0x00, 0x00, 0x00, 0x01])
+HEATER_SLAVE_ADDR = bytes([0x00, 0x00, 0x00, 0x2D])
 
 # AC protocol constants (V1.01)
 AC_START_BYTES = bytes([0x5A, 0x5A])
