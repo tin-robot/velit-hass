@@ -53,17 +53,10 @@ Remove unused import in climate entity
 - Raise `UpdateFailed` for transient errors, `ConfigEntryAuthFailed` for auth failures
 - Entity unique IDs must be derived from the device BLE address for stability across restarts
 
-## Running Tests Locally
+## Testing
 
-```bash
-pip install -r requirements_test.txt
-pytest tests/
-```
-
-For coverage:
-```bash
-pytest tests/ --cov=custom_components.velit --cov-report=term-missing
-```
+See [TESTING.md](TESTING.md) for unit test setup, hardware validation checklists,
+and debug logging guidance.
 
 ## Questions & Discussion
 

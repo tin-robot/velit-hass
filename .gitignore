@@ -2,18 +2,18 @@
 .claude/
 tools/
 
-# Python
+# Python bytecode
 __pycache__/
 *.pyc
 *.pyo
+
+# Test and build artifacts
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
 *.egg-info/
 dist/
 build/
-
-# Test output
 .coverage
 htmlcov/
 coverage.xml
