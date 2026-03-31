@@ -221,7 +221,7 @@ class VelitHeaterCoordinator(_VelitBaseCoordinator):
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         super().__init__(hass, entry, name=f"Velit Heater {entry.data['address']}")
-        self._client = VelitHeaterClient(self._address)
+        self._client = VelitHeaterClient(self.hass, self._address)
         self._unit_detected = False
 
     async def _async_poll(self) -> dict:
@@ -318,7 +318,7 @@ class VelitACCoordinator(_VelitBaseCoordinator):
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         super().__init__(hass, entry, name=f"Velit AC {entry.data['address']}")
-        self._client = VelitACClient(self._address)
+        self._client = VelitACClient(self.hass, self._address)
         self._unit_detected = False
 
     async def _async_poll(self) -> dict:
