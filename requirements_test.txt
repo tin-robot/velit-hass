@@ -7,3 +7,4 @@ ruff
 # Not declared by pytest-homeassistant-custom-component but required for tests to collect.
 aiousbwatcher
 pyserial
+pyudev
