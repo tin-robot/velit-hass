@@ -4,6 +4,21 @@
     "step": {
       "user": {
         "title": "Add Velit Device",
+        "description": "Select your Velit device.",
+        "data": {
+          "address": "Device"
+        }
+      },
+      "not_found": {
+        "title": "No Devices Found",
+        "description": "No Velit devices were found nearby. If the Velit mobile app is open on any nearby phone, close it and tap Try Again.",
+        "menu_options": {
+          "retry": "Try Again",
+          "manual": "Enter Address Manually"
+        }
+      },
+      "manual": {
+        "title": "Add Velit Device",
         "description": "Enter the Bluetooth address of your Velit device.",
         "data": {
           "address": "Bluetooth Address"
@@ -27,8 +42,7 @@
       "unknown": "Unexpected error"
     },
     "abort": {
-      "already_configured": "This device is already configured",
-      "no_devices_found": "No Velit devices found nearby"
+      "already_configured": "This device is already configured"
     }
   },
   "issues": {

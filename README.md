@@ -108,6 +108,8 @@ you to complete setup.
 
 **Device not discovered automatically**
 - Confirm the device is powered on and within Bluetooth range.
+- Close the Velit mobile app on all nearby phones before running setup — the app holds
+  the Bluetooth connection and will prevent Home Assistant from finding the device.
 - Check that your HA instance has a working Bluetooth adapter (Settings → System → Hardware).
 - Try adding the device manually using its Bluetooth address.
 
