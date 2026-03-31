@@ -46,6 +46,11 @@ _LOGGER = logging.getLogger(__name__)
 # manifest.json bluetooth matchers.
 _VELIT_NAME_PREFIXES = ("VELIT", "VLIT", "D30")
 
+# BEKEN Corp manufacturer ID (0x585A = 22618), present in all known Velit
+# advertisements. Some firmware versions advertise with the MAC as the local
+# name rather than a VELIT* prefix — manufacturer ID is the reliable fallback.
+_VELIT_MANUFACTURER_ID = 22618
+
 
 class VelitConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle the Velit config flow."""
@@ -121,7 +126,8 @@ class VelitConfigFlow(ConfigFlow, domain=DOMAIN):
         self._discovered = {
             info.address: info
             for info in async_discovered_service_info(self.hass, connectable=True)
-            if info.name and info.name.startswith(_VELIT_NAME_PREFIXES)
+            if (info.name and info.name.startswith(_VELIT_NAME_PREFIXES))
+            or _VELIT_MANUFACTURER_ID in info.manufacturer_data
         }
 
         if not self._discovered:
