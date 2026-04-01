@@ -94,7 +94,7 @@ class VelitHeaterClimateEntity(CoordinatorEntity[VelitHeaterCoordinator], Climat
     """
 
     _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT]
-    _attr_preset_modes = ["manual", "thermostat"]
+    _attr_preset_modes = ["Manual", "Thermostat"]
     _attr_fan_modes = FAN_MODES
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_target_temperature_step = 1.0
@@ -149,8 +149,8 @@ class VelitHeaterClimateEntity(CoordinatorEntity[VelitHeaterCoordinator], Climat
             return None
         work_mode = self.coordinator.data["work_mode"]
         if work_mode == _HEATER_MODE_THERMOSTAT:
-            return "thermostat"
-        return "manual"
+            return "Thermostat"
+        return "Manual"
 
     @property
     def current_temperature(self) -> float | None:
@@ -219,14 +219,14 @@ class VelitHeaterClimateEntity(CoordinatorEntity[VelitHeaterCoordinator], Climat
             # Start in the currently selected preset mode.
             mode_byte = (
                 0x02
-                if self.preset_mode == "thermostat"
+                if self.preset_mode == "Thermostat"
                 else 0x01
             )
             await self.coordinator._client.send_command(0x01, bytes([mode_byte]))
         await self.coordinator.async_request_refresh()
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
-        mode_byte = 0x02 if preset_mode == "thermostat" else 0x01
+        mode_byte = 0x02 if preset_mode == "Thermostat" else 0x01
         await self.coordinator._client.send_command(0x00, bytes([mode_byte]))
         await self.coordinator.async_request_refresh()
 

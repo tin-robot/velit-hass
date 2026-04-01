@@ -83,7 +83,7 @@
     },
     "sensor": {
       "inlet_temp": {
-        "name": "Inlet Temperature"
+        "name": "Temperature"
       },
       "casing_temp": {
         "name": "Casing Temperature"

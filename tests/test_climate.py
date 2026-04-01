@@ -120,12 +120,12 @@ class TestHeaterClimateState:
 
     def test_preset_manual(self):
         entity, _ = _heater_entity()
-        assert entity.preset_mode == "manual"
+        assert entity.preset_mode == "Manual"
 
     def test_preset_thermostat(self):
         data = {**_make_heater_coord().data, "work_mode": 2}
         entity, _ = _heater_entity(data=data)
-        assert entity.preset_mode == "thermostat"
+        assert entity.preset_mode == "Thermostat"
 
     def test_current_temperature(self):
         entity, _ = _heater_entity()
@@ -206,12 +206,12 @@ class TestHeaterClimateActions:
 
     async def test_set_preset_thermostat(self):
         entity, coord = _heater_entity()
-        await entity.async_set_preset_mode("thermostat")
+        await entity.async_set_preset_mode("Thermostat")
         coord._client.send_command.assert_called_once_with(0x00, bytes([0x02]))
 
     async def test_set_preset_manual(self):
         entity, coord = _heater_entity()
-        await entity.async_set_preset_mode("manual")
+        await entity.async_set_preset_mode("Manual")
         coord._client.send_command.assert_called_once_with(0x00, bytes([0x01]))
 
     async def test_set_temperature_celsius(self):
