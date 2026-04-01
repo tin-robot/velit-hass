@@ -59,6 +59,7 @@ def _make_heater_coord(data=_UNSET, temp_unit=UnitOfTemperature.CELSIUS):
     coord.async_request_refresh = AsyncMock()
     coord._client = MagicMock()
     coord._client.send_command = AsyncMock()
+    coord._post_command_fast_polls = 0
     return coord
 
 
@@ -88,6 +89,8 @@ def _heater_entity(data=_UNSET, temp_unit=UnitOfTemperature.CELSIUS, options=Non
     entity._attr_unique_id = "test_climate"
     entity._attr_name = "Test Heater"
     entity._attr_device_info = MagicMock()
+    entity._optimistic_hvac_mode = None
+    entity.async_write_ha_state = MagicMock()
     return entity, coord
 
 
