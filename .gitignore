@@ -1,6 +1,7 @@
 # Local development tooling — not for version control
 .claude/
-tools/
+tools/*
+!tools/discover.py
 
 # Python bytecode
 __pycache__/
