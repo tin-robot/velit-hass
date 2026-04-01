@@ -5,7 +5,8 @@
   "bluetooth": [
     {"local_name": "VELIT*", "connectable": true},
     {"local_name": "VLIT*", "connectable": true},
-    {"local_name": "D30*", "connectable": true}
+    {"local_name": "D30*", "connectable": true},
+    {"manufacturer_id": 22618, "connectable": true}
   ],
   "codeowners": ["@JohnFreeborg", "@jeremyroe"],
   "config_flow": true,
