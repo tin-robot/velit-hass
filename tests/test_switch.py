@@ -166,20 +166,20 @@ class TestPrimeSwitchState:
 class TestPrimeSwitchActions:
     async def test_turn_on_sends_start_command(self):
         entity, coord = _make_prime_entity()
-        with patch("asyncio.create_task"):
+        with patch.object(entity, "_run_prime", new=AsyncMock()):
             await entity.async_turn_on()
         coord._client.send_command.assert_awaited_once_with(0x05, bytes([0x00]))
 
     async def test_turn_on_sets_priming_state(self):
         entity, coord = _make_prime_entity()
-        with patch("asyncio.create_task"):
+        with patch.object(entity, "_run_prime", new=AsyncMock()):
             await entity.async_turn_on()
         assert coord.priming is True
         assert coord.prime_remaining == _PRIME_DURATION
 
     async def test_turn_on_notifies_tick(self):
         entity, coord = _make_prime_entity()
-        with patch("asyncio.create_task"):
+        with patch.object(entity, "_run_prime", new=AsyncMock()):
             await entity.async_turn_on()
         coord._notify_prime_tick.assert_called_once()
 
