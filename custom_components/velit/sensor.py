@@ -2,8 +2,8 @@
 
 Heater sensors (all sourced from coordinator data):
   - Inlet temperature
-  - Casing temperature
-  - Outlet temperature
+  - Casing temperature (disabled by default — encoding unconfirmed)
+  - Outlet temperature (disabled by default — encoding unconfirmed)
   - Supply voltage
   - Fan RPM
   - Altitude
@@ -73,6 +73,8 @@ HEATER_SENSORS: tuple[VelitSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        # Encoding unconfirmed — disabled until verified with Velit
+        entity_registry_enabled_default=False,
     ),
     VelitSensorEntityDescription(
         key="outlet_temp",
@@ -81,6 +83,8 @@ HEATER_SENSORS: tuple[VelitSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        # Encoding unconfirmed — disabled until verified with Velit
+        entity_registry_enabled_default=False,
     ),
     VelitSensorEntityDescription(
         key="voltage",
