@@ -32,6 +32,12 @@ from .packet_utils import fahrenheit_to_celsius
 _LOGGER = logging.getLogger(__name__)
 
 POLL_INTERVAL_DEFAULT = 30  # seconds
+_ACTIVE_POLL_INTERVAL = timedelta(seconds=5)
+
+# Machine states that warrant faster polling — device is mid-transition.
+# Settled states: 0 (Standby), 1 (Normal). Transitional states per protocol doc;
+# actual device behaviour during cleaning and cooldown must be validated on hardware.
+_ACTIVE_MACHINE_STATES = {2, 3, 4, 5}  # Cooling Down, Overtemp Standby, Cleaning, Clean Complete
 
 # Setpoint ranges used to infer whether the device is in Celsius or Fahrenheit mode.
 # These ranges are non-overlapping so the unit can be determined unambiguously.
@@ -95,6 +101,7 @@ class _VelitBaseCoordinator(DataUpdateCoordinator):
         self._entry = entry
         self._address: str = entry.data["address"]
         self.domain = DOMAIN
+        self._configured_interval = timedelta(seconds=poll_seconds)
         # Detected on first connect — preserved for the lifetime of the entry.
         self.temp_unit: str = UnitOfTemperature.CELSIUS
         # Prime pump state — owned by VelitHeaterFuelPrimingSwitch, read by the
@@ -224,6 +231,19 @@ class VelitHeaterCoordinator(_VelitBaseCoordinator):
         self._client = VelitHeaterClient(self.hass, self._address)
         self._unit_detected = False
 
+    async def _async_update_data(self) -> dict:
+        data = await super()._async_update_data()
+        self._adjust_poll_interval(data.get("machine_state", 0))
+        return data
+
+    def _adjust_poll_interval(self, machine_state: int) -> None:
+        """Switch to fast polling during active state transitions, restore when settled."""
+        if machine_state in _ACTIVE_MACHINE_STATES:
+            if self.update_interval != _ACTIVE_POLL_INTERVAL:
+                self.update_interval = _ACTIVE_POLL_INTERVAL
+        elif self.update_interval != self._configured_interval:
+            self.update_interval = self._configured_interval
+
     async def _async_poll(self) -> dict:
         q1 = await self._client.send_command(0x0A, bytes([0x00]))
         if q1 is None:
@@ -245,6 +265,13 @@ class VelitHeaterCoordinator(_VelitBaseCoordinator):
         machine_state = q1_data[4]
         heater_power_w = q1_data[5]
         fuel_pump_hz = q1_data[6] / 10.0
+
+        # TEMP: remove after cleaning and cooldown state transitions confirmed on hardware
+        _LOGGER.debug(
+            "machine_state raw=%d (%s)",
+            machine_state,
+            HEATER_MACHINE_STATES.get(machine_state, f"Unknown ({machine_state})"),
+        )
 
         # Detect unit on first successful poll.
         if not self._unit_detected:

@@ -151,6 +151,7 @@ class VelitHeaterFuelPrimingSwitch(CoordinatorEntity[VelitHeaterCoordinator], Sw
         self._prime_task = asyncio.create_task(self._run_prime())
         self.async_write_ha_state()
         self.coordinator._notify_prime_tick()
+        await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs) -> None:
         """Stop the prime cycle early — cancels the task which sends the stop command."""
@@ -178,3 +179,4 @@ class VelitHeaterFuelPrimingSwitch(CoordinatorEntity[VelitHeaterCoordinator], Sw
             self._prime_task = None
             self.async_write_ha_state()
             self.coordinator._notify_prime_tick()
+            await self.coordinator.async_request_refresh()

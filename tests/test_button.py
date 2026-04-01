@@ -23,6 +23,7 @@ def _make_coord():
     coord = MagicMock()
     coord._client = MagicMock()
     coord._client.send_command = AsyncMock()
+    coord.async_request_refresh = AsyncMock()
     return coord
 
 

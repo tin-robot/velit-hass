@@ -119,6 +119,7 @@ def _make_prime_entity(connected=True):
     coord.priming = False
     coord.prime_remaining = 0
     coord._notify_prime_tick = MagicMock()
+    coord.async_request_refresh = AsyncMock()
     entry = _make_entry()
     entity = VelitHeaterFuelPrimingSwitch.__new__(VelitHeaterFuelPrimingSwitch)
     entity.coordinator = coord

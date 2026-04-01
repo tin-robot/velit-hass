@@ -69,6 +69,7 @@ class VelitHeaterCleaningButton(
         )
 
     async def async_press(self) -> None:
-        """Send the residual fuel clearance command."""
+        """Send the residual fuel clearance command and poll immediately for state confirmation."""
         await self.coordinator._client.send_command(0x09, bytes([0x00]))
         _LOGGER.debug("Residual fuel clearance command sent")
+        await self.coordinator.async_request_refresh()
