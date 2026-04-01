@@ -274,6 +274,7 @@ def _make_cleaning_entity(connected=True):
     coord._client.connected = connected
     coord._client.send_command = AsyncMock()
     coord.cleaning = False
+    coord.start_cleaning = MagicMock()
     coord.async_request_refresh = AsyncMock()
     entry = _make_entry()
     entity = VelitHeaterCleaningSwitch.__new__(VelitHeaterCleaningSwitch)
@@ -286,11 +287,11 @@ def _make_cleaning_entity(connected=True):
 
 @pytest.mark.asyncio
 class TestCleaningSwitchActions:
-    async def test_turn_on_sends_command_and_sets_flag(self):
+    async def test_turn_on_sends_command_and_starts_cleaning(self):
         entity, coord = _make_cleaning_entity()
         await entity.async_turn_on()
         coord._client.send_command.assert_awaited_once_with(0x09, bytes([0x00]))
-        assert coord.cleaning is True
+        coord.start_cleaning.assert_called_once()
 
     async def test_turn_on_triggers_refresh(self):
         entity, coord = _make_cleaning_entity()
@@ -302,6 +303,7 @@ class TestCleaningSwitchActions:
         coord.cleaning = True
         await entity.async_turn_on()
         coord._client.send_command.assert_not_awaited()
+        coord.start_cleaning.assert_not_called()
 
     async def test_turn_off_is_noop_snaps_back(self):
         entity, coord = _make_cleaning_entity()

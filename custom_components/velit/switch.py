@@ -225,7 +225,7 @@ class VelitHeaterCleaningSwitch(CoordinatorEntity[VelitHeaterCoordinator], Switc
         if self.coordinator.cleaning:
             return
         await self.coordinator._client.send_command(0x09, bytes([0x00]))
-        self.coordinator.cleaning = True
+        self.coordinator.start_cleaning()
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
 

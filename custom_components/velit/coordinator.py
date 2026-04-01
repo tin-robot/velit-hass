@@ -109,9 +109,11 @@ class _VelitBaseCoordinator(DataUpdateCoordinator):
         self.priming: bool = False
         self.prime_remaining: int = 0
         self._prime_tick_callbacks: list = []
-        # Cleaning state — set by VelitHeaterCleaningSwitch on press, cleared here
-        # when machine_state returns to Standby so the switch auto-turns off.
+        # Cleaning state — managed by start_cleaning(); cleared here when the
+        # device returns to Standby after having been active.
         self.cleaning: bool = False
+        self._cleaning_seen_active: bool = False
+        self._cleaning_timeout_polls: int = 0
 
     def register_prime_tick(self, callback) -> None:
         """Register a callback to fire on each prime countdown tick."""
@@ -121,6 +123,12 @@ class _VelitBaseCoordinator(DataUpdateCoordinator):
         """Notify all registered prime tick listeners (e.g. countdown sensor)."""
         for cb in self._prime_tick_callbacks:
             cb()
+
+    def start_cleaning(self) -> None:
+        """Mark a cleaning cycle as initiated and reset confirmation tracking."""
+        self.cleaning = True
+        self._cleaning_seen_active = False
+        self._cleaning_timeout_polls = 0
 
     async def async_connect(self) -> None:
         """Connect the BLE client. Called from async_setup_entry."""
@@ -237,14 +245,41 @@ class VelitHeaterCoordinator(_VelitBaseCoordinator):
     async def _async_update_data(self) -> dict:
         data = await super()._async_update_data()
         self._adjust_poll_interval(data.get("machine_state", 0))
-        # Auto-clear cleaning flag when the device returns to Standby.
-        if self.cleaning and data.get("machine_state") == 0:
-            self.cleaning = False
+        # Track cleaning cycle completion.
+        # Only clear once the device has confirmed it left Standby (cycle started)
+        # and then returned to Standby (cycle complete). If the device never leaves
+        # Standby within the timeout window, the command was not accepted.
+        if self.cleaning:
+            machine_state = data.get("machine_state", 0)
+            if machine_state != 0:
+                self._cleaning_seen_active = True
+                self._cleaning_timeout_polls = 0
+            elif self._cleaning_seen_active:
+                # Returned to Standby after being active — cycle complete.
+                self.cleaning = False
+                self._cleaning_seen_active = False
+                self._cleaning_timeout_polls = 0
+            else:
+                # Still in Standby — waiting for device to transition.
+                self._cleaning_timeout_polls += 1
+                if self._cleaning_timeout_polls >= 6:
+                    # ~30s at 5s poll rate with no transition — command not accepted.
+                    _LOGGER.warning(
+                        "Cleaning command not confirmed by device after %d polls — clearing",
+                        self._cleaning_timeout_polls,
+                    )
+                    self.cleaning = False
+                    self._cleaning_seen_active = False
+                    self._cleaning_timeout_polls = 0
         return data
 
     def _adjust_poll_interval(self, machine_state: int) -> None:
-        """Switch to fast polling during active state transitions, restore when settled."""
-        if machine_state in _ACTIVE_MACHINE_STATES:
+        """Switch to fast polling during active state transitions, restore when settled.
+
+        Also uses fast polling while a cleaning cycle is pending confirmation so
+        the switch reflects the outcome within seconds rather than 30s.
+        """
+        if self.cleaning or machine_state in _ACTIVE_MACHINE_STATES:
             if self.update_interval != _ACTIVE_POLL_INTERVAL:
                 self.update_interval = _ACTIVE_POLL_INTERVAL
         elif self.update_interval != self._configured_interval:
