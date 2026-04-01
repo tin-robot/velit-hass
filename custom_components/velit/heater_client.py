@@ -25,7 +25,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from bleak import BleakClient, BLEDevice
+from bleak import BLEDevice
 from bleak.backends.characteristic import BleakGATTCharacteristic
 from bleak_retry_connector import BleakClientWithServiceCache, establish_connection
 
