@@ -97,7 +97,7 @@ def _build_heater_packet(master: bytes, slave: bytes, func: int, data: bytes) ->
 def _print_adv(device: BLEDevice, adv: AdvertisementData) -> None:
     print(f"\nDevice:   {device.address}")
     print(f"  Name:   {adv.local_name or device.name or '(none)'}")
-    print(f"  RSSI:   {device.rssi} dBm")
+    print(f"  RSSI:   {adv.rssi} dBm")
     if adv.manufacturer_data:
         for company_id, payload in adv.manufacturer_data.items():
             print(f"  Manufacturer data (0x{company_id:04X}): {payload.hex(' ')}")
@@ -122,9 +122,11 @@ async def scan() -> None:
     """Scan for Velit devices and print full advertisement data."""
     print(f"Scanning {_SCAN_TIMEOUT:.0f}s for Velit devices ({', '.join(_VELIT_NAME_PREFIXES)}* or manufacturer ID {_VELIT_MANUFACTURER_ID})...")
     found: list[tuple[BLEDevice, AdvertisementData]] = []
+    seen: set[str] = set()
 
     def callback(device: BLEDevice, adv: AdvertisementData) -> None:
-        if _is_velit(device, adv):
+        if _is_velit(device, adv) and device.address not in seen:
+            seen.add(device.address)
             found.append((device, adv))
             _print_adv(device, adv)
 
