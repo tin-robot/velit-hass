@@ -109,6 +109,9 @@ class _VelitBaseCoordinator(DataUpdateCoordinator):
         self.priming: bool = False
         self.prime_remaining: int = 0
         self._prime_tick_callbacks: list = []
+        # Cleaning state — set by VelitHeaterCleaningSwitch on press, cleared here
+        # when machine_state returns to Standby so the switch auto-turns off.
+        self.cleaning: bool = False
 
     def register_prime_tick(self, callback) -> None:
         """Register a callback to fire on each prime countdown tick."""
@@ -234,6 +237,9 @@ class VelitHeaterCoordinator(_VelitBaseCoordinator):
     async def _async_update_data(self) -> dict:
         data = await super()._async_update_data()
         self._adjust_poll_interval(data.get("machine_state", 0))
+        # Auto-clear cleaning flag when the device returns to Standby.
+        if self.cleaning and data.get("machine_state") == 0:
+            self.cleaning = False
         return data
 
     def _adjust_poll_interval(self, machine_state: int) -> None:

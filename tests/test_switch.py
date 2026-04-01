@@ -1,4 +1,4 @@
-"""Unit tests for VelitHeaterBLESwitch and VelitHeaterFuelPrimingSwitch."""
+"""Unit tests for VelitHeaterBLESwitch, VelitHeaterFuelPrimingSwitch, and VelitHeaterCleaningSwitch."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import pytest
 
 from custom_components.velit.switch import (
     VelitHeaterBLESwitch,
+    VelitHeaterCleaningSwitch,
     VelitHeaterFuelPrimingSwitch,
     _PRIME_DURATION,
 )
@@ -260,3 +261,72 @@ class TestPrimeSwitchRunPrime:
             await entity._run_prime()
         # 2 ticks during loop + 1 in finally = 3 total
         assert coord._notify_prime_tick.call_count == 3
+
+
+# ---------------------------------------------------------------------------
+# Cleaning switch
+# ---------------------------------------------------------------------------
+
+
+def _make_cleaning_entity(connected=True):
+    coord = MagicMock()
+    coord._client = MagicMock()
+    coord._client.connected = connected
+    coord._client.send_command = AsyncMock()
+    coord.cleaning = False
+    coord.async_request_refresh = AsyncMock()
+    entry = _make_entry()
+    entity = VelitHeaterCleaningSwitch.__new__(VelitHeaterCleaningSwitch)
+    entity.coordinator = coord
+    entity._attr_unique_id = f"{entry.data['address']}_cleaning"
+    entity._attr_device_info = MagicMock()
+    entity.async_write_ha_state = MagicMock()
+    return entity, coord
+
+
+@pytest.mark.asyncio
+class TestCleaningSwitchActions:
+    async def test_turn_on_sends_command_and_sets_flag(self):
+        entity, coord = _make_cleaning_entity()
+        await entity.async_turn_on()
+        coord._client.send_command.assert_awaited_once_with(0x09, bytes([0x00]))
+        assert coord.cleaning is True
+
+    async def test_turn_on_triggers_refresh(self):
+        entity, coord = _make_cleaning_entity()
+        await entity.async_turn_on()
+        coord.async_request_refresh.assert_awaited_once()
+
+    async def test_turn_on_noop_if_already_cleaning(self):
+        entity, coord = _make_cleaning_entity()
+        coord.cleaning = True
+        await entity.async_turn_on()
+        coord._client.send_command.assert_not_awaited()
+
+    async def test_turn_off_is_noop_snaps_back(self):
+        entity, coord = _make_cleaning_entity()
+        coord.cleaning = True
+        await entity.async_turn_off()
+        coord._client.send_command.assert_not_awaited()
+        entity.async_write_ha_state.assert_called()
+
+    async def test_is_on_reflects_coordinator_flag(self):
+        entity, coord = _make_cleaning_entity()
+        assert entity.is_on is False
+        coord.cleaning = True
+        assert entity.is_on is True
+
+    async def test_unique_id(self):
+        entity, _ = _make_cleaning_entity()
+        assert entity.unique_id == "AA:BB:CC:DD:EE:FF_cleaning"
+
+
+def test_cleaning_available_when_connected():
+    entity, _ = _make_cleaning_entity(connected=True)
+    assert entity.available is True
+
+
+def test_cleaning_unavailable_when_disconnected():
+    entity, _ = _make_cleaning_entity(connected=False)
+    assert entity.available is False
+
