@@ -33,6 +33,10 @@ _LOGGER = logging.getLogger(__name__)
 
 POLL_INTERVAL_DEFAULT = 30  # seconds
 _ACTIVE_POLL_INTERVAL = timedelta(seconds=5)
+# Number of consecutive poll failures tolerated before entities go unavailable.
+# A single BLE notification timeout is common during active device operations
+# and should not immediately surface as "unavailable" in the UI.
+_POLL_FAILURE_TOLERANCE = 2
 
 # Machine states that warrant faster polling — device is mid-transition.
 # Settled states: 0 (Standby), 1 (Normal). Transitional states per protocol doc;
@@ -114,6 +118,9 @@ class _VelitBaseCoordinator(DataUpdateCoordinator):
         self.cleaning: bool = False
         self._cleaning_seen_active: bool = False
         self._cleaning_timeout_polls: int = 0
+        # Poll failure tolerance — see _async_update_data.
+        self._consecutive_failures: int = 0
+        self._last_data: dict | None = None
 
     def register_prime_tick(self, callback) -> None:
         """Register a callback to fire on each prime countdown tick."""
@@ -169,14 +176,39 @@ class _VelitBaseCoordinator(DataUpdateCoordinator):
         """Issue device queries and return a data dict. Raise UpdateFailed on error."""
 
     async def _async_update_data(self) -> dict:
-        """Called by DataUpdateCoordinator on each poll cycle."""
+        """Called by DataUpdateCoordinator on each poll cycle.
+
+        Tolerates up to _POLL_FAILURE_TOLERANCE consecutive failures before
+        marking entities unavailable. On a tolerated failure the last known
+        data is returned so the UI stays stable across transient BLE timeouts.
+        """
         try:
             data = await self._async_poll()
-        except UpdateFailed:
+        except UpdateFailed as exc:
+            self._consecutive_failures += 1
+            if self._consecutive_failures < _POLL_FAILURE_TOLERANCE and self._last_data is not None:
+                _LOGGER.debug(
+                    "Poll failed (%d/%d), returning stale data: %s",
+                    self._consecutive_failures,
+                    _POLL_FAILURE_TOLERANCE,
+                    exc,
+                )
+                return self._last_data
             raise
         except Exception as exc:
+            self._consecutive_failures += 1
+            if self._consecutive_failures < _POLL_FAILURE_TOLERANCE and self._last_data is not None:
+                _LOGGER.debug(
+                    "Poll failed (%d/%d), returning stale data: %s",
+                    self._consecutive_failures,
+                    _POLL_FAILURE_TOLERANCE,
+                    exc,
+                )
+                return self._last_data
             raise UpdateFailed(f"Unexpected error polling {self._address}: {exc}") from exc
 
+        self._consecutive_failures = 0
+        self._last_data = data
         self._update_fault_issue(data)
         return data
 
