@@ -61,7 +61,7 @@ HEATER_SENSORS: tuple[VelitSensorEntityDescription, ...] = (
     VelitSensorEntityDescription(
         key="inlet_temp",
         data_key="inlet_temp_c",
-        name="Inlet Temperature",
+        name="Temperature",
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
