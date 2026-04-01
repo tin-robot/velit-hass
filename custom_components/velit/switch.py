@@ -43,6 +43,7 @@ async def async_setup_entry(
     async_add_entities([
         VelitHeaterBLESwitch(coordinator, entry),
         VelitHeaterFuelPrimingSwitch(coordinator, entry),
+        VelitHeaterCleaningSwitch(coordinator, entry),
     ])
 
 
@@ -151,6 +152,7 @@ class VelitHeaterFuelPrimingSwitch(CoordinatorEntity[VelitHeaterCoordinator], Sw
         self._prime_task = asyncio.create_task(self._run_prime())
         self.async_write_ha_state()
         self.coordinator._notify_prime_tick()
+        await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs) -> None:
         """Stop the prime cycle early — cancels the task which sends the stop command."""
@@ -178,3 +180,59 @@ class VelitHeaterFuelPrimingSwitch(CoordinatorEntity[VelitHeaterCoordinator], Sw
             self._prime_task = None
             self.async_write_ha_state()
             self.coordinator._notify_prime_tick()
+            await self.coordinator.async_request_refresh()
+
+
+class VelitHeaterCleaningSwitch(CoordinatorEntity[VelitHeaterCoordinator], SwitchEntity):
+    """Switch for the residual fuel cleaning cycle.
+
+    On  — cleaning cycle running; auto-turns off when machine_state returns
+          to Standby (coordinator clears the flag on the next successful poll).
+    Off — idle; tapping starts the cycle.
+
+    The switch cannot be turned off manually — there is no stop command for the
+    cleaning cycle. Attempts to turn it off while on are ignored and the state
+    is pushed back immediately so the UI snaps back to on.
+    """
+
+    _attr_name = "Cleaning"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:broom"
+
+    def __init__(
+        self,
+        coordinator: VelitHeaterCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.data['address']}_cleaning"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.data["address"])},
+            name=entry.data.get(CONF_NAME, entry.data["address"]),
+            manufacturer="Velit",
+        )
+
+    @property
+    def available(self) -> bool:
+        return self.coordinator._client.connected
+
+    @property
+    def is_on(self) -> bool:
+        return self.coordinator.cleaning
+
+    async def async_turn_on(self, **kwargs) -> None:
+        """Send the cleaning command and mark cycle as active."""
+        if self.coordinator.cleaning:
+            return
+        await self.coordinator._client.send_command(0x09, bytes([0x00]))
+        self.coordinator.start_cleaning()
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        """No-op — the cleaning cycle cannot be stopped manually.
+
+        Pushes state back immediately so the UI snaps back to on rather than
+        appearing to accept the off command.
+        """
+        self.async_write_ha_state()

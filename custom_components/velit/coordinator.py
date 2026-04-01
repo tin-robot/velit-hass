@@ -32,6 +32,16 @@ from .packet_utils import fahrenheit_to_celsius
 _LOGGER = logging.getLogger(__name__)
 
 POLL_INTERVAL_DEFAULT = 30  # seconds
+_ACTIVE_POLL_INTERVAL = timedelta(seconds=5)
+# Number of consecutive poll failures tolerated before entities go unavailable.
+# A single BLE notification timeout is common during active device operations
+# and should not immediately surface as "unavailable" in the UI.
+_POLL_FAILURE_TOLERANCE = 2
+
+# Machine states that warrant faster polling — device is mid-transition.
+# Settled states: 0 (Standby), 1 (Normal). Transitional states per protocol doc;
+# actual device behaviour during cleaning and cooldown must be validated on hardware.
+_ACTIVE_MACHINE_STATES = {2, 3, 4, 5}  # Cooling Down, Overtemp Standby, Cleaning, Clean Complete
 
 # Setpoint ranges used to infer whether the device is in Celsius or Fahrenheit mode.
 # These ranges are non-overlapping so the unit can be determined unambiguously.
@@ -95,6 +105,7 @@ class _VelitBaseCoordinator(DataUpdateCoordinator):
         self._entry = entry
         self._address: str = entry.data["address"]
         self.domain = DOMAIN
+        self._configured_interval = timedelta(seconds=poll_seconds)
         # Detected on first connect — preserved for the lifetime of the entry.
         self.temp_unit: str = UnitOfTemperature.CELSIUS
         # Prime pump state — owned by VelitHeaterFuelPrimingSwitch, read by the
@@ -102,6 +113,14 @@ class _VelitBaseCoordinator(DataUpdateCoordinator):
         self.priming: bool = False
         self.prime_remaining: int = 0
         self._prime_tick_callbacks: list = []
+        # Cleaning state — managed by start_cleaning(); cleared here when the
+        # device returns to Standby after having been active.
+        self.cleaning: bool = False
+        self._cleaning_seen_active: bool = False
+        self._cleaning_timeout_polls: int = 0
+        # Poll failure tolerance — see _async_update_data.
+        self._consecutive_failures: int = 0
+        self._last_data: dict | None = None
 
     def register_prime_tick(self, callback) -> None:
         """Register a callback to fire on each prime countdown tick."""
@@ -111,6 +130,12 @@ class _VelitBaseCoordinator(DataUpdateCoordinator):
         """Notify all registered prime tick listeners (e.g. countdown sensor)."""
         for cb in self._prime_tick_callbacks:
             cb()
+
+    def start_cleaning(self) -> None:
+        """Mark a cleaning cycle as initiated and reset confirmation tracking."""
+        self.cleaning = True
+        self._cleaning_seen_active = False
+        self._cleaning_timeout_polls = 0
 
     async def async_connect(self) -> None:
         """Connect the BLE client. Called from async_setup_entry."""
@@ -151,14 +176,39 @@ class _VelitBaseCoordinator(DataUpdateCoordinator):
         """Issue device queries and return a data dict. Raise UpdateFailed on error."""
 
     async def _async_update_data(self) -> dict:
-        """Called by DataUpdateCoordinator on each poll cycle."""
+        """Called by DataUpdateCoordinator on each poll cycle.
+
+        Tolerates up to _POLL_FAILURE_TOLERANCE consecutive failures before
+        marking entities unavailable. On a tolerated failure the last known
+        data is returned so the UI stays stable across transient BLE timeouts.
+        """
         try:
             data = await self._async_poll()
-        except UpdateFailed:
+        except UpdateFailed as exc:
+            self._consecutive_failures += 1
+            if self._consecutive_failures < _POLL_FAILURE_TOLERANCE and self._last_data is not None:
+                _LOGGER.debug(
+                    "Poll failed (%d/%d), returning stale data: %s",
+                    self._consecutive_failures,
+                    _POLL_FAILURE_TOLERANCE,
+                    exc,
+                )
+                return self._last_data
             raise
         except Exception as exc:
+            self._consecutive_failures += 1
+            if self._consecutive_failures < _POLL_FAILURE_TOLERANCE and self._last_data is not None:
+                _LOGGER.debug(
+                    "Poll failed (%d/%d), returning stale data: %s",
+                    self._consecutive_failures,
+                    _POLL_FAILURE_TOLERANCE,
+                    exc,
+                )
+                return self._last_data
             raise UpdateFailed(f"Unexpected error polling {self._address}: {exc}") from exc
 
+        self._consecutive_failures = 0
+        self._last_data = data
         self._update_fault_issue(data)
         return data
 
@@ -224,6 +274,49 @@ class VelitHeaterCoordinator(_VelitBaseCoordinator):
         self._client = VelitHeaterClient(self.hass, self._address)
         self._unit_detected = False
 
+    async def _async_update_data(self) -> dict:
+        data = await super()._async_update_data()
+        self._adjust_poll_interval(data.get("machine_state", 0))
+        # Track cleaning cycle completion.
+        # Only clear once the device has confirmed it left Standby (cycle started)
+        # and then returned to Standby (cycle complete). If the device never leaves
+        # Standby within the timeout window, the command was not accepted.
+        if self.cleaning:
+            machine_state = data.get("machine_state", 0)
+            if machine_state != 0:
+                self._cleaning_seen_active = True
+                self._cleaning_timeout_polls = 0
+            elif self._cleaning_seen_active:
+                # Returned to Standby after being active — cycle complete.
+                self.cleaning = False
+                self._cleaning_seen_active = False
+                self._cleaning_timeout_polls = 0
+            else:
+                # Still in Standby — waiting for device to transition.
+                self._cleaning_timeout_polls += 1
+                if self._cleaning_timeout_polls >= 6:
+                    # ~30s at 5s poll rate with no transition — command not accepted.
+                    _LOGGER.warning(
+                        "Cleaning command not confirmed by device after %d polls — clearing",
+                        self._cleaning_timeout_polls,
+                    )
+                    self.cleaning = False
+                    self._cleaning_seen_active = False
+                    self._cleaning_timeout_polls = 0
+        return data
+
+    def _adjust_poll_interval(self, machine_state: int) -> None:
+        """Switch to fast polling during active state transitions, restore when settled.
+
+        Also uses fast polling while a cleaning cycle is pending confirmation so
+        the switch reflects the outcome within seconds rather than 30s.
+        """
+        if self.cleaning or machine_state in _ACTIVE_MACHINE_STATES:
+            if self.update_interval != _ACTIVE_POLL_INTERVAL:
+                self.update_interval = _ACTIVE_POLL_INTERVAL
+        elif self.update_interval != self._configured_interval:
+            self.update_interval = self._configured_interval
+
     async def _async_poll(self) -> dict:
         q1 = await self._client.send_command(0x0A, bytes([0x00]))
         if q1 is None:
@@ -245,6 +338,13 @@ class VelitHeaterCoordinator(_VelitBaseCoordinator):
         machine_state = q1_data[4]
         heater_power_w = q1_data[5]
         fuel_pump_hz = q1_data[6] / 10.0
+
+        # TEMP: remove after cleaning and cooldown state transitions confirmed on hardware
+        _LOGGER.debug(
+            "machine_state raw=%d (%s)",
+            machine_state,
+            HEATER_MACHINE_STATES.get(machine_state, f"Unknown ({machine_state})"),
+        )
 
         # Detect unit on first successful poll.
         if not self._unit_detected:

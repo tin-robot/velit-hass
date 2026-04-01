@@ -73,6 +73,12 @@ def _remove_stale_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
         registry.async_remove(stale)
         _LOGGER.debug("Removed stale entity %s from registry", stale)
 
+    # Cleaning was a button in earlier versions; replaced by a switch.
+    stale = registry.async_get_entity_id("button", entry.domain, f"{address}_cleaning")
+    if stale:
+        registry.async_remove(stale)
+        _LOGGER.debug("Removed stale entity %s from registry", stale)
+
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a Velit config entry.
