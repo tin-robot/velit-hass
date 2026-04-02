@@ -90,6 +90,7 @@ def _heater_entity(data=_UNSET, temp_unit=UnitOfTemperature.CELSIUS, options=Non
     entity._attr_name = "Test Heater"
     entity._attr_device_info = MagicMock()
     entity._optimistic_hvac_mode = None
+    entity._optimistic_preset_mode = None
     entity.async_write_ha_state = MagicMock()
     return entity, coord
 
