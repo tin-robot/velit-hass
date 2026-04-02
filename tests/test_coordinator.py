@@ -83,37 +83,37 @@ class TestTempUnitDetection:
 
     def test_celsius_range_detected(self):
         coord = self._coordinator()
-        assert coord._detect_temp_unit(16) == UnitOfTemperature.CELSIUS
+        assert coord._detect_temp_unit(4) == UnitOfTemperature.CELSIUS
         assert coord._detect_temp_unit(24) == UnitOfTemperature.CELSIUS
-        assert coord._detect_temp_unit(30) == UnitOfTemperature.CELSIUS
+        assert coord._detect_temp_unit(37) == UnitOfTemperature.CELSIUS
 
     def test_fahrenheit_range_detected(self):
         coord = self._coordinator()
-        assert coord._detect_temp_unit(61) == UnitOfTemperature.FAHRENHEIT
+        assert coord._detect_temp_unit(40) == UnitOfTemperature.FAHRENHEIT
         assert coord._detect_temp_unit(70) == UnitOfTemperature.FAHRENHEIT
-        assert coord._detect_temp_unit(86) == UnitOfTemperature.FAHRENHEIT
+        assert coord._detect_temp_unit(99) == UnitOfTemperature.FAHRENHEIT
 
     def test_ambiguous_falls_back_to_ha_celsius(self):
         coord = self._coordinator(hass_unit=UnitOfTemperature.CELSIUS)
         assert coord._detect_temp_unit(0) == UnitOfTemperature.CELSIUS
-        assert coord._detect_temp_unit(50) == UnitOfTemperature.CELSIUS
+        assert coord._detect_temp_unit(38) == UnitOfTemperature.CELSIUS
 
     def test_ambiguous_falls_back_to_ha_fahrenheit(self):
         coord = self._coordinator(hass_unit=UnitOfTemperature.FAHRENHEIT)
         assert coord._detect_temp_unit(0) == UnitOfTemperature.FAHRENHEIT
 
     def test_boundary_values_are_ambiguous(self):
-        # 31 and 60 are outside both named ranges — they fall back to HA system unit.
+        # 38 and 39 are outside both named ranges (gap between 37°C max and 40°F min).
         # With a Celsius HA system, both should return Celsius (the fallback), not Fahrenheit.
         coord = self._coordinator(hass_unit=UnitOfTemperature.CELSIUS)
-        assert coord._detect_temp_unit(31) == UnitOfTemperature.CELSIUS   # fallback
-        assert coord._detect_temp_unit(60) == UnitOfTemperature.CELSIUS   # fallback
+        assert coord._detect_temp_unit(38) == UnitOfTemperature.CELSIUS   # fallback
+        assert coord._detect_temp_unit(39) == UnitOfTemperature.CELSIUS   # fallback
 
     def test_boundary_values_with_fahrenheit_ha_preference(self):
         # Same ambiguous values with a Fahrenheit HA system should return Fahrenheit.
         coord = self._coordinator(hass_unit=UnitOfTemperature.FAHRENHEIT)
-        assert coord._detect_temp_unit(31) == UnitOfTemperature.FAHRENHEIT
-        assert coord._detect_temp_unit(60) == UnitOfTemperature.FAHRENHEIT
+        assert coord._detect_temp_unit(38) == UnitOfTemperature.FAHRENHEIT
+        assert coord._detect_temp_unit(39) == UnitOfTemperature.FAHRENHEIT
 
 
 # ---------------------------------------------------------------------------

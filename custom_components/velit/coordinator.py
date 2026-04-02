@@ -45,10 +45,11 @@ _ACTIVE_MACHINE_STATES = {2, 3, 4, 5}  # Cooling Down, Overtemp Standby, Cleanin
 
 # Setpoint ranges used to infer whether the device is in Celsius or Fahrenheit mode.
 # These ranges are non-overlapping so the unit can be determined unambiguously.
-_CELSIUS_SETPOINT_MIN = 16
-_CELSIUS_SETPOINT_MAX = 30
-_FAHRENHEIT_SETPOINT_MIN = 61
-_FAHRENHEIT_SETPOINT_MAX = 86
+# Confirmed hardware range: 4–37°C / 40–99°F (firmware 3.26 and 3.8, 2026-04-02).
+_CELSIUS_SETPOINT_MIN = 4
+_CELSIUS_SETPOINT_MAX = 37
+_FAHRENHEIT_SETPOINT_MIN = 40
+_FAHRENHEIT_SETPOINT_MAX = 99
 
 # Heater fault codes from protocol V1.02.
 HEATER_FAULT_CODES: dict[int, str] = {

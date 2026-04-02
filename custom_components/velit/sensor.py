@@ -94,6 +94,9 @@ HEATER_SENSORS: tuple[VelitSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         entity_category=EntityCategory.DIAGNOSTIC,
+        # Disabled by default — reads 0V on some firmware versions even while running.
+        # Enable manually if the sensor shows a live value on your device.
+        entity_registry_enabled_default=False,
     ),
     VelitSensorEntityDescription(
         key="fan_rpm",
