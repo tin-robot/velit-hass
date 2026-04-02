@@ -120,6 +120,11 @@ class VelitHeaterClimateEntity(CoordinatorEntity[VelitHeaterCoordinator], Climat
             name=entry.data.get(CONF_NAME, entry.data["address"]),
             manufacturer="Velit",
         )
+        # Optimistic hvac_mode written immediately after a command so the UI
+        # reflects the expected state without waiting for the next poll.
+        # Cleared once the coordinator confirms the new state, or when the
+        # post-command fast poll window expires (command not accepted by device).
+        self._optimistic_hvac_mode: HVACMode | None = None
 
     # ------------------------------------------------------------------
     # State properties — read from coordinator data, never from device
@@ -138,10 +143,20 @@ class VelitHeaterClimateEntity(CoordinatorEntity[VelitHeaterCoordinator], Climat
     def hvac_mode(self) -> HVACMode | None:
         if self.coordinator.data is None:
             return None
-        state = self.coordinator.data["machine_state"]
-        if state == 0:
-            return HVACMode.OFF
-        return HVACMode.HEAT
+        actual = (
+            HVACMode.OFF
+            if self.coordinator.data["machine_state"] == 0
+            else HVACMode.HEAT
+        )
+        if self._optimistic_hvac_mode is not None:
+            if actual == self._optimistic_hvac_mode:
+                # Device confirmed expected state — clear optimistic override.
+                self._optimistic_hvac_mode = None
+            elif self.coordinator._post_command_fast_polls == 0:
+                # Fast poll window expired without confirmation — command was not
+                # accepted; revert to actual device state.
+                self._optimistic_hvac_mode = None
+        return self._optimistic_hvac_mode if self._optimistic_hvac_mode is not None else actual
 
     @property
     def preset_mode(self) -> str | None:
@@ -223,11 +238,17 @@ class VelitHeaterClimateEntity(CoordinatorEntity[VelitHeaterCoordinator], Climat
                 else 0x01
             )
             await self.coordinator._client.send_command(0x01, bytes([mode_byte]))
+        # Write expected state immediately so the UI responds without waiting
+        # for the next poll. Coordinator confirmation or window expiry clears it.
+        self._optimistic_hvac_mode = hvac_mode
+        self.async_write_ha_state()
+        self.coordinator._post_command_fast_polls = 6
         await self.coordinator.async_request_refresh()
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         mode_byte = 0x02 if preset_mode == "Thermostat" else 0x01
         await self.coordinator._client.send_command(0x00, bytes([mode_byte]))
+        self.coordinator._post_command_fast_polls = 6
         await self.coordinator.async_request_refresh()
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
@@ -240,11 +261,13 @@ class VelitHeaterClimateEntity(CoordinatorEntity[VelitHeaterCoordinator], Climat
         else:
             value = round(temp_c)
         await self.coordinator._client.send_command(0x08, bytes([value]))
+        self.coordinator._post_command_fast_polls = 6
         await self.coordinator.async_request_refresh()
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         gear = int(fan_mode)
         await self.coordinator._client.send_command(0x07, bytes([gear]))
+        self.coordinator._post_command_fast_polls = 6
         await self.coordinator.async_request_refresh()
 
 

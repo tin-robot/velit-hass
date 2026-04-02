@@ -121,6 +121,9 @@ class _VelitBaseCoordinator(DataUpdateCoordinator):
         # Poll failure tolerance — see _async_update_data.
         self._consecutive_failures: int = 0
         self._last_data: dict | None = None
+        # Fast polling window armed after any command. Holds 5s interval for N
+        # cycles so state transitions are caught quickly without waiting 30s.
+        self._post_command_fast_polls: int = 0
 
     def register_prime_tick(self, callback) -> None:
         """Register a callback to fire on each prime countdown tick."""
@@ -308,12 +311,15 @@ class VelitHeaterCoordinator(_VelitBaseCoordinator):
     def _adjust_poll_interval(self, machine_state: int) -> None:
         """Switch to fast polling during active state transitions, restore when settled.
 
-        Also uses fast polling while a cleaning cycle is pending confirmation so
-        the switch reflects the outcome within seconds rather than 30s.
+        Also uses fast polling while a cleaning cycle is pending confirmation or
+        while the post-command window is active, so state changes after any
+        command are caught within seconds rather than 30s.
         """
-        if self.cleaning or machine_state in _ACTIVE_MACHINE_STATES:
+        if self.cleaning or machine_state in _ACTIVE_MACHINE_STATES or self._post_command_fast_polls > 0:
             if self.update_interval != _ACTIVE_POLL_INTERVAL:
                 self.update_interval = _ACTIVE_POLL_INTERVAL
+            if self._post_command_fast_polls > 0:
+                self._post_command_fast_polls -= 1
         elif self.update_interval != self._configured_interval:
             self.update_interval = self._configured_interval
 
