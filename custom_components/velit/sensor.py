@@ -102,6 +102,9 @@ HEATER_SENSORS: tuple[VelitSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="RPM",
         entity_category=EntityCategory.DIAGNOSTIC,
+        # Always reads 0 RPM on known firmware versions while running — disabled
+        # until confirmed populated by Velit
+        entity_registry_enabled_default=False,
     ),
     VelitSensorEntityDescription(
         key="altitude",
@@ -120,6 +123,9 @@ HEATER_SENSORS: tuple[VelitSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfFrequency.HERTZ,
         entity_category=EntityCategory.DIAGNOSTIC,
+        # Always reads 0 Hz on known firmware versions — disabled until confirmed
+        # populated by Velit
+        entity_registry_enabled_default=False,
     ),
     VelitSensorEntityDescription(
         key="heater_power",
@@ -129,6 +135,9 @@ HEATER_SENSORS: tuple[VelitSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfPower.WATT,
         entity_category=EntityCategory.DIAGNOSTIC,
+        # Always reads 0 W on known firmware versions — disabled until confirmed
+        # populated by Velit
+        entity_registry_enabled_default=False,
     ),
     VelitSensorEntityDescription(
         key="fault_code",
