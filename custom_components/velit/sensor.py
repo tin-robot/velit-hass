@@ -2,13 +2,7 @@
 
 Heater sensors (all sourced from coordinator data):
   - Inlet temperature
-  - Casing temperature (disabled by default — encoding unconfirmed)
-  - Outlet temperature (disabled by default — encoding unconfirmed)
-  - Supply voltage
-  - Fan RPM
   - Altitude
-  - Fuel pump frequency (Hz)
-  - Heater power (W)
   - Fault code (human-readable string)
   - Machine state (human-readable string)
 
@@ -33,9 +27,6 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONF_NAME,
-    UnitOfElectricPotential,
-    UnitOfFrequency,
-    UnitOfPower,
     UnitOfTemperature,
     UnitOfTime,
 )
@@ -67,49 +58,6 @@ HEATER_SENSORS: tuple[VelitSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
     ),
     VelitSensorEntityDescription(
-        key="casing_temp",
-        data_key="casing_temp_c",
-        name="Casing Temperature",
-        device_class=SensorDeviceClass.TEMPERATURE,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        # Encoding unconfirmed — disabled until verified with Velit
-        entity_registry_enabled_default=False,
-    ),
-    VelitSensorEntityDescription(
-        key="outlet_temp",
-        data_key="outlet_temp_c",
-        name="Outlet Temperature",
-        device_class=SensorDeviceClass.TEMPERATURE,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        # Encoding unconfirmed — disabled until verified with Velit
-        entity_registry_enabled_default=False,
-    ),
-    VelitSensorEntityDescription(
-        key="voltage",
-        data_key="voltage_v",
-        name="Supply Voltage",
-        device_class=SensorDeviceClass.VOLTAGE,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        # Disabled by default — reads 0V on some firmware versions even while running.
-        # Enable manually if the sensor shows a live value on your device.
-        entity_registry_enabled_default=False,
-    ),
-    VelitSensorEntityDescription(
-        key="fan_rpm",
-        data_key="fan_rpm",
-        name="Fan Speed",
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement="RPM",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        # Always reads 0 RPM on known firmware versions while running — disabled
-        # until confirmed populated by Velit
-        entity_registry_enabled_default=False,
-    ),
-    VelitSensorEntityDescription(
         key="altitude",
         data_key="altitude",
         name="Altitude",
@@ -117,30 +65,6 @@ HEATER_SENSORS: tuple[VelitSensorEntityDescription, ...] = (
         # Unit depends on the device's active temperature unit (metric vs imperial).
         # Set dynamically in VelitHeaterSensorEntity based on coordinator.temp_unit.
         entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    VelitSensorEntityDescription(
-        key="fuel_pump_freq",
-        data_key="fuel_pump_hz",
-        name="Fuel Pump Frequency",
-        device_class=SensorDeviceClass.FREQUENCY,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=UnitOfFrequency.HERTZ,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        # Always reads 0 Hz on known firmware versions — disabled until confirmed
-        # populated by Velit
-        entity_registry_enabled_default=False,
-    ),
-    VelitSensorEntityDescription(
-        key="heater_power",
-        data_key="heater_power_w",
-        name="Heater Power",
-        device_class=SensorDeviceClass.POWER,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=UnitOfPower.WATT,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        # Always reads 0 W on known firmware versions — disabled until confirmed
-        # populated by Velit
-        entity_registry_enabled_default=False,
     ),
     VelitSensorEntityDescription(
         key="fault_code",

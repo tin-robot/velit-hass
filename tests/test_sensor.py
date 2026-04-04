@@ -30,13 +30,7 @@ def _make_heater_data(**overrides):
         "set_temp_c": 22.0,
         "machine_state": 1,
         "machine_state_str": "Normal",
-        "heater_power_w": 80,
-        "fuel_pump_hz": 0.5,
-        "voltage_v": 12.7,
-        "fan_rpm": 1200,
         "inlet_temp_c": 21.7,
-        "casing_temp_c": 16.7,
-        "outlet_temp_c": 11.7,
         "altitude": 1415,
     }
     base.update(overrides)
@@ -75,22 +69,6 @@ class TestHeaterSensorValues:
         entity = _sensor_for_key("inlet_temp")
         assert entity.native_value == pytest.approx(21.7)
 
-    def test_casing_temp(self):
-        entity = _sensor_for_key("casing_temp")
-        assert entity.native_value == pytest.approx(16.7)
-
-    def test_outlet_temp(self):
-        entity = _sensor_for_key("outlet_temp")
-        assert entity.native_value == pytest.approx(11.7)
-
-    def test_voltage(self):
-        entity = _sensor_for_key("voltage")
-        assert entity.native_value == pytest.approx(12.7)
-
-    def test_fan_rpm(self):
-        entity = _sensor_for_key("fan_rpm")
-        assert entity.native_value == 1200
-
     def test_altitude(self):
         entity = _sensor_for_key("altitude")
         assert entity.native_value == 1415
@@ -123,11 +101,6 @@ class TestHeaterSensorUnavailable:
     def test_inlet_temp_none_when_unavailable(self):
         data = _make_heater_data(inlet_temp_c=None)
         entity = _sensor_for_key("inlet_temp", data=data)
-        assert entity.native_value is None
-
-    def test_outlet_temp_none_when_unavailable(self):
-        data = _make_heater_data(outlet_temp_c=None)
-        entity = _sensor_for_key("outlet_temp", data=data)
         assert entity.native_value is None
 
     def test_altitude_none_when_unavailable(self):

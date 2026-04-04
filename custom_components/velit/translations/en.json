@@ -85,26 +85,8 @@
       "inlet_temp": {
         "name": "Temperature"
       },
-      "casing_temp": {
-        "name": "Casing Temperature"
-      },
-      "outlet_temp": {
-        "name": "Outlet Temperature"
-      },
-      "voltage": {
-        "name": "Supply Voltage"
-      },
-      "fan_rpm": {
-        "name": "Fan Speed"
-      },
       "altitude": {
         "name": "Altitude"
-      },
-      "fuel_pump_freq": {
-        "name": "Fuel Pump Frequency"
-      },
-      "heater_power": {
-        "name": "Heater Power"
       },
       "fault_code": {
         "name": "Fault"
