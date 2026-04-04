@@ -91,6 +91,7 @@ def _heater_entity(data=_UNSET, temp_unit=UnitOfTemperature.CELSIUS, options=Non
     entity._attr_device_info = MagicMock()
     entity._optimistic_hvac_mode = None
     entity._optimistic_preset_mode = None
+    entity._ventilating = False
     entity.async_write_ha_state = MagicMock()
     return entity, coord
 
@@ -126,10 +127,10 @@ class TestHeaterClimateState:
         entity, _ = _heater_entity()
         assert entity.preset_mode == "Manual"
 
-    def test_preset_thermostat(self):
+    def test_preset_auto(self):
         data = {**_make_heater_coord().data, "work_mode": 2}
         entity, _ = _heater_entity(data=data)
-        assert entity.preset_mode == "Thermostat"
+        assert entity.preset_mode == "Auto"
 
     def test_current_temperature(self):
         entity, _ = _heater_entity()
@@ -139,9 +140,20 @@ class TestHeaterClimateState:
         entity, _ = _heater_entity()
         assert entity.target_temperature == pytest.approx(22.0)
 
-    def test_fan_mode(self):
+    def test_hvac_mode_fan_only_when_ventilating(self):
         entity, _ = _heater_entity()
-        assert entity.fan_mode == "3"
+        entity._ventilating = True
+        assert entity.hvac_mode == HVACMode.FAN_ONLY
+
+    def test_preset_none_when_ventilating(self):
+        entity, _ = _heater_entity()
+        entity._ventilating = True
+        assert entity.preset_mode is None
+
+    def test_hvac_action_fan_when_ventilating(self):
+        entity, _ = _heater_entity()
+        entity._ventilating = True
+        assert entity.hvac_action == HVACAction.FAN
 
     def test_hvac_action_heating_when_normal(self):
         data = {**_make_heater_coord().data, "machine_state": 1, "fault_code": 0}
@@ -182,7 +194,6 @@ class TestHeaterClimateState:
         assert entity.hvac_mode is None
         assert entity.current_temperature is None
         assert entity.target_temperature is None
-        assert entity.fan_mode is None
 
 
 # ---------------------------------------------------------------------------
@@ -202,15 +213,36 @@ class TestHeaterClimateActions:
         await entity.async_set_hvac_mode(HVACMode.HEAT)
         coord._client.send_command.assert_called_once_with(0x01, bytes([0x01]))
 
-    async def test_set_hvac_heat_thermostat(self):
+    async def test_set_hvac_heat_auto(self):
         data = {**_make_heater_coord().data, "work_mode": 2}
         entity, coord = _heater_entity(data=data)
         await entity.async_set_hvac_mode(HVACMode.HEAT)
         coord._client.send_command.assert_called_once_with(0x01, bytes([0x02]))
 
-    async def test_set_preset_thermostat(self):
+    async def test_set_hvac_fan_only(self):
         entity, coord = _heater_entity()
-        await entity.async_set_preset_mode("Thermostat")
+        await entity.async_set_hvac_mode(HVACMode.FAN_ONLY)
+        coord._client.send_command.assert_called_once_with(0x03, bytes([0x00]))
+        assert entity._ventilating is True
+
+    async def test_set_hvac_off_clears_ventilating(self):
+        entity, coord = _heater_entity()
+        entity._ventilating = True
+        await entity.async_set_hvac_mode(HVACMode.OFF)
+        assert entity._ventilating is False
+
+    async def test_set_hvac_heat_from_fan_only_stops_ventilation_first(self):
+        entity, coord = _heater_entity()
+        entity._ventilating = True
+        await entity.async_set_hvac_mode(HVACMode.HEAT)
+        calls = coord._client.send_command.call_args_list
+        assert calls[0] == ((0x04, bytes([0x00])),)
+        assert calls[1][0][0] == 0x01
+        assert entity._ventilating is False
+
+    async def test_set_preset_auto(self):
+        entity, coord = _heater_entity()
+        await entity.async_set_preset_mode("Auto")
         coord._client.send_command.assert_called_once_with(0x00, bytes([0x02]))
 
     async def test_set_preset_manual(self):
@@ -230,14 +262,9 @@ class TestHeaterClimateActions:
         await entity.async_set_temperature(temperature=24.0)
         coord._client.send_command.assert_called_once_with(0x08, bytes([75]))
 
-    async def test_set_fan_mode(self):
-        entity, coord = _heater_entity()
-        await entity.async_set_fan_mode("5")
-        coord._client.send_command.assert_called_once_with(0x07, bytes([5]))
-
     async def test_refresh_called_after_each_action(self):
         entity, coord = _heater_entity()
-        await entity.async_set_fan_mode("2")
+        await entity.async_set_hvac_mode(HVACMode.FAN_ONLY)
         coord.async_request_refresh.assert_called_once()
 
 
