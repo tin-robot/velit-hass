@@ -11,9 +11,10 @@ import pytest
 from homeassistant.const import UnitOfTemperature
 
 from custom_components.velit.sensor import (
-    VelitACFaultSensorEntity,
-    VelitHeaterSensorEntity,
+    AC_SENSORS,
     HEATER_SENSORS,
+    VelitACSensorEntity,
+    VelitHeaterSensorEntity,
 )
 
 
@@ -130,32 +131,70 @@ class TestAltitudeUnit:
 
 
 # ---------------------------------------------------------------------------
-# AC fault sensor
+# AC sensors
 # ---------------------------------------------------------------------------
 
+def _make_ac_data(**overrides):
+    base = {
+        "power": 0x02,
+        "mode": 1,
+        "set_temp_c": 22.0,
+        "fan_speed": 3,
+        "swing": 2,
+        "inlet_temp_c": 24.0,
+        "fault_code": 0,
+        "fault_name": "No Fault",
+    }
+    base.update(overrides)
+    return base
 
-class TestACFaultSensor:
-    def _make_entity(self, fault_raw=None):
-        coord = MagicMock()
-        coord.data = {"fault_raw": fault_raw, "mode": 1, "set_temp_c": 22.0,
-                      "fan_speed": 3, "swing": 2, "inlet_temp_raw": None}
-        entry = MagicMock()
-        entry.data = {"address": "AA:BB:CC:DD:EE:FF", "name": "Test AC"}
-        entity = VelitACFaultSensorEntity.__new__(VelitACFaultSensorEntity)
-        entity.coordinator = coord
-        entity._attr_unique_id = "test_ac_fault"
-        entity._attr_device_info = MagicMock()
-        return entity
 
-    def test_none_when_no_data(self):
-        entity = self._make_entity(fault_raw=None)
+def _make_ac_sensor(description, data):
+    coord = MagicMock()
+    coord.data = data
+    entry = MagicMock()
+    entry.data = {"address": "AA:BB:CC:DD:EE:FF", "name": "Test AC"}
+    entity = VelitACSensorEntity.__new__(VelitACSensorEntity)
+    entity.coordinator = coord
+    entity.entity_description = description
+    entity._attr_unique_id = f"AA:BB:CC:DD:EE:FF_{description.key}"
+    entity._attr_device_info = MagicMock()
+    return entity
+
+
+class TestACSensorInletTemp:
+    @pytest.fixture
+    def description(self):
+        return next(d for d in AC_SENSORS if d.key == "inlet_temp")
+
+    def test_returns_inlet_temp(self, description):
+        entity = _make_ac_sensor(description, _make_ac_data(inlet_temp_c=24.0))
+        assert entity.native_value == 24.0
+
+    def test_none_when_inlet_unavailable(self, description):
+        entity = _make_ac_sensor(description, _make_ac_data(inlet_temp_c=None))
         assert entity.native_value is None
 
-    def test_raw_bytes_returned_as_hex(self):
-        entity = self._make_entity(fault_raw=bytes([0x00, 0x01]))
-        assert entity.native_value == "0001"
+    def test_none_when_no_coordinator_data(self, description):
+        entity = _make_ac_sensor(description, _make_ac_data())
+        entity.coordinator.data = None
+        assert entity.native_value is None
 
-    def test_none_coordinator_data_returns_none(self):
-        entity = self._make_entity()
+
+class TestACSensorFault:
+    @pytest.fixture
+    def description(self):
+        return next(d for d in AC_SENSORS if d.key == "fault_code")
+
+    def test_returns_no_fault_string(self, description):
+        entity = _make_ac_sensor(description, _make_ac_data(fault_name="No Fault"))
+        assert entity.native_value == "No Fault"
+
+    def test_returns_unknown_fault_string(self, description):
+        entity = _make_ac_sensor(description, _make_ac_data(fault_name="Unknown (5)"))
+        assert entity.native_value == "Unknown (5)"
+
+    def test_none_when_no_coordinator_data(self, description):
+        entity = _make_ac_sensor(description, _make_ac_data())
         entity.coordinator.data = None
         assert entity.native_value is None
