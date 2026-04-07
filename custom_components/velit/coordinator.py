@@ -175,6 +175,23 @@ class _VelitBaseCoordinator(DataUpdateCoordinator):
             return fahrenheit_to_celsius(value)
         return float(value)
 
+    def _adjust_poll_interval(self, machine_state: int) -> None:
+        """Switch to fast polling during active state transitions, restore when settled.
+
+        Also uses fast polling while a cleaning cycle is pending confirmation or
+        while the post-command window is active, so state changes after any
+        command are caught within seconds rather than 30s.
+
+        Pass machine_state=0 for device types that have no transitional states (AC).
+        """
+        if self.cleaning or machine_state in _ACTIVE_MACHINE_STATES or self._post_command_fast_polls > 0:
+            if self.update_interval != _ACTIVE_POLL_INTERVAL:
+                self.update_interval = _ACTIVE_POLL_INTERVAL
+            if self._post_command_fast_polls > 0:
+                self._post_command_fast_polls -= 1
+        elif self.update_interval != self._configured_interval:
+            self.update_interval = self._configured_interval
+
     @abstractmethod
     async def _async_poll(self) -> dict:
         """Issue device queries and return a data dict. Raise UpdateFailed on error."""
@@ -309,21 +326,6 @@ class VelitHeaterCoordinator(_VelitBaseCoordinator):
                     self._cleaning_timeout_polls = 0
         return data
 
-    def _adjust_poll_interval(self, machine_state: int) -> None:
-        """Switch to fast polling during active state transitions, restore when settled.
-
-        Also uses fast polling while a cleaning cycle is pending confirmation or
-        while the post-command window is active, so state changes after any
-        command are caught within seconds rather than 30s.
-        """
-        if self.cleaning or machine_state in _ACTIVE_MACHINE_STATES or self._post_command_fast_polls > 0:
-            if self.update_interval != _ACTIVE_POLL_INTERVAL:
-                self.update_interval = _ACTIVE_POLL_INTERVAL
-            if self._post_command_fast_polls > 0:
-                self._post_command_fast_polls -= 1
-        elif self.update_interval != self._configured_interval:
-            self.update_interval = self._configured_interval
-
     async def _async_poll(self) -> dict:
         q1 = await self._client.send_command(0x0A, bytes([0x00]))
         if q1 is None:
@@ -426,6 +428,13 @@ class VelitACCoordinator(_VelitBaseCoordinator):
         super().__init__(hass, entry, name=f"Velit AC {entry.data['address']}")
         self._client = VelitACClient(self.hass, self._address)
         self._unit_detected = False
+
+    async def _async_update_data(self) -> dict:
+        data = await super()._async_update_data()
+        # AC has no machine state transitions — pass 0 so only the post-command
+        # fast poll window drives the interval, not machine states.
+        self._adjust_poll_interval(0)
+        return data
 
     async def _async_poll(self) -> dict:
         power_rsp = await self._client.send_command(0x01, bytes([0x00]))

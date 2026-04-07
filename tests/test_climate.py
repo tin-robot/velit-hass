@@ -108,6 +108,9 @@ def _ac_entity(data=_UNSET, temp_unit=UnitOfTemperature.CELSIUS):
     entity._attr_name = "Test AC"
     entity._attr_device_info = MagicMock()
     entity._last_hvac_mode = HVACMode.COOL
+    entity._optimistic_hvac_mode = None
+    entity._optimistic_preset_mode = None
+    entity.async_write_ha_state = MagicMock()
     return entity, coord
 
 
