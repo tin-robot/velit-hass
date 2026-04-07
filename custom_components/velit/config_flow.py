@@ -38,7 +38,7 @@ from homeassistant.helpers.selector import (
     TextSelector,
 )
 
-from .const import CONF_POLL_INTERVAL, CONF_UNAVAILABLE_ON_FAULT, DEVICE_TYPE_AC, DEVICE_TYPE_HEATER, DOMAIN
+from .const import CONF_POLL_INTERVAL, CONF_UNAVAILABLE_ON_FAULT, DEVICE_TYPE_AC, DEVICE_TYPE_HEATER, DOMAIN, UUID_SERVICE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -128,6 +128,7 @@ class VelitConfigFlow(ConfigFlow, domain=DOMAIN):
             for info in async_discovered_service_info(self.hass, connectable=True)
             if (info.name and info.name.startswith(_VELIT_NAME_PREFIXES))
             or _VELIT_MANUFACTURER_ID in info.manufacturer_data
+            or UUID_SERVICE in info.service_uuids
         }
 
         if not self._discovered:
