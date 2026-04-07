@@ -407,20 +407,19 @@ class VelitHeaterCoordinator(_VelitBaseCoordinator):
 class VelitACCoordinator(_VelitBaseCoordinator):
     """Coordinator for Velit AC devices (protocol V1.01).
 
-    Polls mode (0x02), temperature (0x03), fan speed (0x04), swing (0x10),
-    inlet air temperature (0x07), and fault info (0x0B) on each cycle.
-
-    Inlet temperature and fault response formats are not fully documented —
-    both are queried and the raw response is stored. Decoded values will be
-    added once response formats are confirmed via hardware capture.
+    Polls power (0x01), mode (0x02), temperature (0x03), fan speed (0x04),
+    swing (0x10), inlet air temperature (0x07), and fault info (0x0B) on
+    each cycle.
 
     Data dict keys:
+      power             int     — 0x01 = off, 0x02 = on (func 0x01 response)
       mode              int     — current operation mode code (see AC protocol 0x02)
       set_temp_c        float   — current setpoint in Celsius
       fan_speed         int     — current fan speed 1–5
       swing             int     — 1 = swinging, 2 = stopped (raw device value)
-      inlet_temp_raw    bytes | None  — raw 0x07 response data (format unconfirmed)
-      fault_raw         bytes | None  — raw 0x0B response data (format unconfirmed)
+      inlet_temp_c      float | None  — inlet air temperature in Celsius (raw byte = °C)
+      fault_code        int     — raw fault code (0 = no fault)
+      fault_name        str     — human-readable fault description
     """
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -429,6 +428,10 @@ class VelitACCoordinator(_VelitBaseCoordinator):
         self._unit_detected = False
 
     async def _async_poll(self) -> dict:
+        power_rsp = await self._client.send_command(0x01, bytes([0x00]))
+        if power_rsp is None:
+            raise UpdateFailed("No response to power query (0x01)")
+
         mode_rsp = await self._client.send_command(0x02, bytes([0x00]))
         if mode_rsp is None:
             raise UpdateFailed("No response to mode query (0x02)")
@@ -445,7 +448,8 @@ class VelitACCoordinator(_VelitBaseCoordinator):
         if swing_rsp is None:
             raise UpdateFailed("No response to swing query (0x10)")
 
-        # Inlet temp and fault formats unconfirmed — log raw, do not raise on failure.
+        # Inlet temp and fault: do not raise on failure — device may not respond
+        # to these while powered off.
         inlet_rsp = await self._client.send_command(0x07, bytes([0x00]))
         fault_rsp = await self._client.send_command(0x0B, bytes([0x00]))
 
@@ -455,11 +459,24 @@ class VelitACCoordinator(_VelitBaseCoordinator):
             self._unit_detected = True
             _LOGGER.debug("AC %s: detected temp unit %s", self._address, self.temp_unit)
 
+        # Inlet temp: single byte, always in Celsius. Confirmed on hardware (0x18 = 24°C).
+        inlet_temp_c: float | None = None
+        if inlet_rsp is not None and inlet_rsp["data"]:
+            inlet_temp_c = float(inlet_rsp["data"][0])
+
+        # Fault: single byte, 0x00 = no fault. Code table not in protocol doc.
+        fault_code = 0
+        if fault_rsp is not None and fault_rsp["data"]:
+            fault_code = fault_rsp["data"][0]
+        fault_name = "No Fault" if fault_code == 0 else f"Unknown ({fault_code})"
+
         return {
+            "power": power_rsp["data"][0],
             "mode": mode_rsp["data"][0],
             "set_temp_c": self.to_celsius(set_temp_raw),
             "fan_speed": fan_rsp["data"][0],
             "swing": swing_rsp["data"][0],
-            "inlet_temp_raw": inlet_rsp["data"] if inlet_rsp else None,
-            "fault_raw": fault_rsp["data"] if fault_rsp else None,
+            "inlet_temp_c": inlet_temp_c,
+            "fault_code": fault_code,
+            "fault_name": fault_name,
         }

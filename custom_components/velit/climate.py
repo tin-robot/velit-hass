@@ -348,9 +348,10 @@ class VelitACClimateEntity(CoordinatorEntity[VelitACCoordinator], ClimateEntity)
     def hvac_mode(self) -> HVACMode | None:
         if self.coordinator.data is None:
             return None
-        mode_code = self.coordinator.data["mode"]
-        if mode_code == 0:
+        # Power state (func 0x01): 0x01 = off, 0x02 = on.
+        if self.coordinator.data.get("power") == 0x01:
             return HVACMode.OFF
+        mode_code = self.coordinator.data["mode"]
         # Preset codes (4, 5, 6) don't map to an HVACMode directly — return
         # the last known base mode so the UI doesn't flip to an unexpected state.
         if mode_code in self._PRESET_CODES:
@@ -366,6 +367,12 @@ class VelitACClimateEntity(CoordinatorEntity[VelitACCoordinator], ClimateEntity)
             return None
         mode_code = self.coordinator.data["mode"]
         return self._PRESET_CODES.get(mode_code, AC_PRESET_NONE)
+
+    @property
+    def current_temperature(self) -> float | None:
+        if self.coordinator.data is None:
+            return None
+        return self.coordinator.data.get("inlet_temp_c")
 
     @property
     def target_temperature(self) -> float | None:

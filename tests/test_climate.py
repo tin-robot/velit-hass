@@ -66,12 +66,14 @@ def _make_heater_coord(data=_UNSET, temp_unit=UnitOfTemperature.CELSIUS):
 def _make_ac_coord(data=_UNSET, temp_unit=UnitOfTemperature.CELSIUS):
     coord = MagicMock()
     coord.data = data if data is not _UNSET else {
+        "power": 0x02,
         "mode": 1,
         "set_temp_c": 22.0,
         "fan_speed": 3,
         "swing": 2,
-        "inlet_temp_raw": None,
-        "fault_raw": None,
+        "inlet_temp_c": None,
+        "fault_code": 0,
+        "fault_name": "No Fault",
     }
     coord.temp_unit = temp_unit
     coord.async_request_refresh = AsyncMock()
@@ -279,7 +281,7 @@ class TestACClimateState:
         assert entity.hvac_mode == HVACMode.COOL
 
     def test_hvac_mode_off(self):
-        data = {**_make_ac_coord().data, "mode": 0}
+        data = {**_make_ac_coord().data, "power": 0x01}
         entity, _ = _ac_entity(data=data)
         assert entity.hvac_mode == HVACMode.OFF
 
@@ -333,7 +335,7 @@ class TestACClimateActions:
         coord._client.send_command.assert_called_once_with(0x01, bytes([0x01]))
 
     async def test_set_hvac_cool(self):
-        entity, coord = _ac_entity(data={**_make_ac_coord().data, "mode": 0})
+        entity, coord = _ac_entity(data={**_make_ac_coord().data, "power": 0x01})
         await entity.async_set_hvac_mode(HVACMode.COOL)
         # Powers on first, then sets mode.
         calls = coord._client.send_command.call_args_list
