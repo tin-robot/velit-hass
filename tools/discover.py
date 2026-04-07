@@ -104,6 +104,9 @@ def _is_velit(device: BLEDevice, adv: AdvertisementData) -> bool:
         return True
     if _VELIT_MANUFACTURER_ID in adv.manufacturer_data:
         return True
+    # 0000ffe0 is a generic UART-over-BLE UUID and may appear on non-Velit
+    # devices (e.g. SOK batteries). This filter intentionally casts wide —
+    # the config flow protocol handshake is the guard against false positives.
     return _VELIT_SERVICE_UUID in (adv.service_uuids or [])
 
 
@@ -240,19 +243,20 @@ async def probe(address: str) -> None:
                 props = ", ".join(char.properties)
                 print(f"    Char: {char.uuid}  [{props}]")
 
+        # Subscribe before sending any commands so responses are not missed,
+        # including the firmware version JSON response sent immediately below.
+        await client.start_notify(_UUID_READ_NOTIFY, on_notify)
+        print(f"\nSubscribed to notifications on {_UUID_READ_NOTIFY}")
+
         # Attempt firmware version query via JSON (AC OTA protocol).
+        # Response (if any) will arrive as a notification on ffe1.
         print("\nQuerying firmware version (JSON command)...")
         try:
             info_cmd = json.dumps({"cmd": "info"}).encode()
             await client.write_gatt_char(_UUID_WRITE, info_cmd, response=False)
             await asyncio.sleep(1.0)
-            print("  (any JSON response will appear as a notification above)")
         except Exception as exc:
             print(f"  firmware query error: {exc}")
-
-        # Subscribe to notifications.
-        await client.start_notify(_UUID_READ_NOTIFY, on_notify)
-        print(f"\nSubscribed to notifications on {_UUID_READ_NOTIFY}")
 
         # --- Heater probe ---
         heater_notification_start = len(notifications)
