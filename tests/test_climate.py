@@ -79,6 +79,7 @@ def _make_ac_coord(data=_UNSET, temp_unit=UnitOfTemperature.CELSIUS):
     coord.async_request_refresh = AsyncMock()
     coord._client = MagicMock()
     coord._client.send_command = AsyncMock()
+    coord._post_command_fast_polls = 0
     return coord
 
 
@@ -325,6 +326,90 @@ class TestACClimateState:
         entity, _ = _ac_entity()
         assert entity.fan_mode == "3"
 
+    def test_hvac_mode_heat(self):
+        data = {**_make_ac_coord().data, "mode": 2}
+        entity, _ = _ac_entity(data=data)
+        assert entity.hvac_mode == HVACMode.HEAT
+
+    def test_hvac_mode_fan_only(self):
+        data = {**_make_ac_coord().data, "mode": 3}
+        entity, _ = _ac_entity(data=data)
+        assert entity.hvac_mode == HVACMode.FAN_ONLY
+
+    def test_hvac_mode_none_when_no_data(self):
+        entity, _ = _ac_entity(data=None)
+        assert entity.hvac_mode is None
+
+    def test_preset_mode_none_when_no_data(self):
+        entity, _ = _ac_entity(data=None)
+        assert entity.preset_mode is None
+
+    def test_current_temperature_from_inlet(self):
+        data = {**_make_ac_coord().data, "inlet_temp_c": 24.0}
+        entity, _ = _ac_entity(data=data)
+        assert entity.current_temperature == 24.0
+
+    def test_current_temperature_none_when_no_data(self):
+        entity, _ = _ac_entity(data=None)
+        assert entity.current_temperature is None
+
+    def test_target_temperature_from_coord(self):
+        entity, _ = _ac_entity()
+        assert entity.target_temperature == 22.0
+
+    def test_target_temperature_none_when_no_data(self):
+        entity, _ = _ac_entity(data=None)
+        assert entity.target_temperature is None
+
+
+# ---------------------------------------------------------------------------
+# AC — optimistic state
+# ---------------------------------------------------------------------------
+
+
+class TestACClimateOptimistic:
+    def test_optimistic_hvac_mode_returned_immediately(self):
+        entity, coord = _ac_entity()
+        # Set optimistic before coordinator confirms.
+        entity._optimistic_hvac_mode = HVACMode.HEAT
+        coord._post_command_fast_polls = 3
+        assert entity.hvac_mode == HVACMode.HEAT
+
+    def test_optimistic_hvac_mode_clears_when_confirmed(self):
+        # Coordinator data already shows HEAT — optimistic agrees, so it clears.
+        data = {**_make_ac_coord().data, "mode": 2}
+        entity, coord = _ac_entity(data=data)
+        entity._optimistic_hvac_mode = HVACMode.HEAT
+        coord._post_command_fast_polls = 3
+        result = entity.hvac_mode
+        assert result == HVACMode.HEAT
+        assert entity._optimistic_hvac_mode is None
+
+    def test_optimistic_hvac_mode_clears_when_fast_polls_exhausted(self):
+        # Fast poll window expired without confirmation — revert to actual.
+        entity, coord = _ac_entity()  # actual = COOL (mode=1)
+        entity._optimistic_hvac_mode = HVACMode.HEAT
+        coord._post_command_fast_polls = 0
+        result = entity.hvac_mode
+        assert result == HVACMode.COOL
+        assert entity._optimistic_hvac_mode is None
+
+    def test_optimistic_preset_mode_returned_immediately(self):
+        entity, coord = _ac_entity()
+        entity._optimistic_preset_mode = AC_PRESET_TURBO
+        coord._post_command_fast_polls = 3
+        assert entity.preset_mode == AC_PRESET_TURBO
+
+    def test_optimistic_preset_mode_clears_when_confirmed(self):
+        # Coordinator data shows turbo (mode=6) — matches optimistic, so it clears.
+        data = {**_make_ac_coord().data, "mode": 6}
+        entity, coord = _ac_entity(data=data)
+        entity._optimistic_preset_mode = AC_PRESET_TURBO
+        coord._post_command_fast_polls = 3
+        result = entity.preset_mode
+        assert result == AC_PRESET_TURBO
+        assert entity._optimistic_preset_mode is None
+
 
 # ---------------------------------------------------------------------------
 # AC — actions
@@ -391,6 +476,31 @@ class TestACClimateActions:
         entity, coord = _ac_entity()
         await entity.async_set_fan_mode("1")
         coord.async_request_refresh.assert_called_once()
+
+    async def test_write_ha_state_called_after_hvac_set(self):
+        entity, coord = _ac_entity()
+        await entity.async_set_hvac_mode(HVACMode.OFF)
+        entity.async_write_ha_state.assert_called_once()
+
+    async def test_write_ha_state_called_after_preset_set(self):
+        entity, coord = _ac_entity()
+        await entity.async_set_preset_mode(AC_PRESET_SLEEP)
+        entity.async_write_ha_state.assert_called_once()
+
+    async def test_post_command_fast_polls_armed_after_temperature(self):
+        entity, coord = _ac_entity()
+        await entity.async_set_temperature(temperature=25.0)
+        assert coord._post_command_fast_polls == 6
+
+    async def test_post_command_fast_polls_armed_after_fan(self):
+        entity, coord = _ac_entity()
+        await entity.async_set_fan_mode("2")
+        assert coord._post_command_fast_polls == 6
+
+    async def test_post_command_fast_polls_armed_after_swing(self):
+        entity, coord = _ac_entity()
+        await entity.async_set_swing_mode("on")
+        assert coord._post_command_fast_polls == 6
 
 
 # ---------------------------------------------------------------------------

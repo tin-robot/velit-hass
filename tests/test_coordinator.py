@@ -297,6 +297,57 @@ class TestVelitACCoordinatorPoll:
         await coord._async_poll()
         assert coord.temp_unit == UnitOfTemperature.FAHRENHEIT
 
+    async def test_raises_on_mid_poll_none(self):
+        coord = await self._make_coord()
+        # Power query succeeds; mode query returns None.
+        coord._client.send_command = AsyncMock(
+            side_effect=[
+                {"data": bytes([0x02]), "func": 0x01},
+                None,
+            ]
+        )
+        with pytest.raises(UpdateFailed):
+            await coord._async_poll()
+
+    async def test_fault_data_decoded_in_poll(self):
+        coord = await self._make_coord()
+        coord._client.send_command = AsyncMock(
+            side_effect=self._mock_responses(fault=0x03)
+        )
+        data = await coord._async_poll()
+        assert data["fault_code"] == 3
+        assert data["fault_name"] != "No Fault"
+
+    def test_adjust_poll_interval_decrements_fast_poll_counter(self):
+        coord = self._make_coord_sync()
+        coord._post_command_fast_polls = 3
+        coord._adjust_poll_interval(0)
+        assert coord._post_command_fast_polls == 2
+
+    def test_adjust_poll_interval_enables_fast_when_pending(self):
+        from datetime import timedelta
+        coord = self._make_coord_sync()
+        coord._post_command_fast_polls = 2
+        coord.update_interval = timedelta(seconds=30)
+        coord._adjust_poll_interval(0)
+        assert coord.update_interval == timedelta(seconds=5)
+
+    def test_adjust_poll_interval_restores_normal_when_idle(self):
+        from datetime import timedelta
+        coord = self._make_coord_sync()
+        coord._post_command_fast_polls = 0
+        coord.update_interval = timedelta(seconds=5)
+        coord._adjust_poll_interval(0)
+        assert coord.update_interval == coord._configured_interval
+
+    def _make_coord_sync(self):
+        hass = _make_hass()
+        entry = _make_entry(device_type="ac")
+        with patch("custom_components.velit.coordinator.VelitACClient") as mock_cls:
+            coord = VelitACCoordinator(hass, entry)
+            coord._client = mock_cls.return_value
+        return coord
+
 
 # ---------------------------------------------------------------------------
 # Fault issue registry
