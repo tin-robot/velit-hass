@@ -308,6 +308,8 @@ class VelitACClimateEntity(CoordinatorEntity[VelitACCoordinator], ClimateEntity)
         | ClimateEntityFeature.PRESET_MODE
         | ClimateEntityFeature.FAN_MODE
         | ClimateEntityFeature.SWING_MODE
+        | ClimateEntityFeature.TURN_ON
+        | ClimateEntityFeature.TURN_OFF
     )
 
     # Map from AC protocol mode codes to HA HVACMode.
@@ -343,29 +345,53 @@ class VelitACClimateEntity(CoordinatorEntity[VelitACCoordinator], ClimateEntity)
         # Tracks the last non-preset HVAC mode so we can restore it when
         # clearing a preset (protocol requires resending the base mode code).
         self._last_hvac_mode: HVACMode = HVACMode.COOL
+        # Optimistic state — same pattern as VelitHeaterClimateEntity.
+        self._optimistic_hvac_mode: HVACMode | None = None
+        self._optimistic_preset_mode: str | None = None
 
     @property
     def hvac_mode(self) -> HVACMode | None:
         if self.coordinator.data is None:
             return None
-        mode_code = self.coordinator.data["mode"]
-        if mode_code == 0:
-            return HVACMode.OFF
-        # Preset codes (4, 5, 6) don't map to an HVACMode directly — return
-        # the last known base mode so the UI doesn't flip to an unexpected state.
-        if mode_code in self._PRESET_CODES:
-            return self._last_hvac_mode
-        hvac = self._MODE_TO_HVAC.get(mode_code)
-        if hvac is not None:
-            self._last_hvac_mode = hvac
-        return hvac
+        # Power state (func 0x01): 0x01 = off, 0x02 = on.
+        if self.coordinator.data.get("power") == 0x01:
+            actual = HVACMode.OFF
+        else:
+            mode_code = self.coordinator.data["mode"]
+            # Preset codes (4, 5, 6) don't map to an HVACMode directly — return
+            # the last known base mode so the UI doesn't flip to an unexpected state.
+            if mode_code in self._PRESET_CODES:
+                actual = self._last_hvac_mode
+            else:
+                hvac = self._MODE_TO_HVAC.get(mode_code)
+                if hvac is not None:
+                    self._last_hvac_mode = hvac
+                actual = hvac  # type: ignore[assignment]
+        if self._optimistic_hvac_mode is not None:
+            if actual == self._optimistic_hvac_mode:
+                self._optimistic_hvac_mode = None
+            elif self.coordinator._post_command_fast_polls == 0:
+                self._optimistic_hvac_mode = None
+        return self._optimistic_hvac_mode if self._optimistic_hvac_mode is not None else actual
 
     @property
     def preset_mode(self) -> str | None:
         if self.coordinator.data is None:
             return None
         mode_code = self.coordinator.data["mode"]
-        return self._PRESET_CODES.get(mode_code, AC_PRESET_NONE)
+        actual = self._PRESET_CODES.get(mode_code, AC_PRESET_NONE)
+        if self._optimistic_preset_mode is not None:
+            if actual == self._optimistic_preset_mode:
+                self._optimistic_preset_mode = None
+            elif self.coordinator._post_command_fast_polls == 0:
+                self._optimistic_preset_mode = None
+        return self._optimistic_preset_mode if self._optimistic_preset_mode is not None else actual
+
+    @property
+    def current_temperature(self) -> float | None:
+        if self.coordinator.data is None:
+            return None
+        return self.coordinator.data.get("inlet_temp_c")
 
     @property
     def target_temperature(self) -> float | None:
@@ -402,6 +428,9 @@ class VelitACClimateEntity(CoordinatorEntity[VelitACCoordinator], ClimateEntity)
             code = mode_map.get(hvac_mode)
             if code is not None:
                 await self.coordinator._client.send_command(0x02, bytes([code]))
+        self._optimistic_hvac_mode = hvac_mode
+        self.async_write_ha_state()
+        self.coordinator._post_command_fast_polls = 6
         await self.coordinator.async_request_refresh()
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
@@ -424,6 +453,9 @@ class VelitACClimateEntity(CoordinatorEntity[VelitACCoordinator], ClimateEntity)
             code = preset_map.get(preset_mode)
             if code is not None:
                 await self.coordinator._client.send_command(0x02, bytes([code]))
+        self._optimistic_preset_mode = preset_mode
+        self.async_write_ha_state()
+        self.coordinator._post_command_fast_polls = 6
         await self.coordinator.async_request_refresh()
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
@@ -435,14 +467,21 @@ class VelitACClimateEntity(CoordinatorEntity[VelitACCoordinator], ClimateEntity)
         else:
             value = round(temp_c)
         await self.coordinator._client.send_command(0x03, bytes([value]))
+        self.coordinator._post_command_fast_polls = 6
         await self.coordinator.async_request_refresh()
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         await self.coordinator._client.send_command(0x04, bytes([int(fan_mode)]))
+        self.coordinator._post_command_fast_polls = 6
         await self.coordinator.async_request_refresh()
 
     async def async_set_swing_mode(self, swing_mode: str) -> None:
         # Protocol: 0x01 = start swing, 0x02 = stop swing.
         value = 0x01 if swing_mode == "on" else 0x02
         await self.coordinator._client.send_command(0x10, bytes([value]))
+        self.coordinator._post_command_fast_polls = 6
         await self.coordinator.async_request_refresh()
+
+    async def async_turn_on(self) -> None:
+        """Power on and restore the last active HVAC mode."""
+        await self.async_set_hvac_mode(self._last_hvac_mode)
