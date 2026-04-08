@@ -308,6 +308,8 @@ class VelitACClimateEntity(CoordinatorEntity[VelitACCoordinator], ClimateEntity)
         | ClimateEntityFeature.PRESET_MODE
         | ClimateEntityFeature.FAN_MODE
         | ClimateEntityFeature.SWING_MODE
+        | ClimateEntityFeature.TURN_ON
+        | ClimateEntityFeature.TURN_OFF
     )
 
     # Map from AC protocol mode codes to HA HVACMode.
@@ -479,3 +481,7 @@ class VelitACClimateEntity(CoordinatorEntity[VelitACCoordinator], ClimateEntity)
         await self.coordinator._client.send_command(0x10, bytes([value]))
         self.coordinator._post_command_fast_polls = 6
         await self.coordinator.async_request_refresh()
+
+    async def async_turn_on(self) -> None:
+        """Power on and restore the last active HVAC mode."""
+        await self.async_set_hvac_mode(self._last_hvac_mode)

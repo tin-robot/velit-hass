@@ -502,6 +502,15 @@ class TestACClimateActions:
         await entity.async_set_swing_mode("on")
         assert coord._post_command_fast_polls == 6
 
+    async def test_turn_on_restores_last_hvac_mode(self):
+        # Device is off; async_turn_on should power on and restore last mode.
+        entity, coord = _ac_entity(data={**_make_ac_coord().data, "power": 0x01})
+        entity._last_hvac_mode = HVACMode.HEAT
+        await entity.async_turn_on()
+        calls = coord._client.send_command.call_args_list
+        assert calls[0].args == (0x01, bytes([0x02]))   # power on
+        assert calls[1].args == (0x02, bytes([0x02]))   # HEAT = 0x02
+
 
 # ---------------------------------------------------------------------------
 # Heater — icon
